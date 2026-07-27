@@ -1,0 +1,199 @@
+---
+title: "1_resazurin_raw_compiler"
+author: "Samuel Gurr"
+date: "2026-03-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# SET WORKING DIRECTORY 
+knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's
+#knitr::opts_knit$set(root.dir = "C:/Users/samuel.gurr/Documents/Github_repositories/EAD-ASEB-Airradians_Popgen_OA/") # Sam's
+```
+
+
+```{r}
+library(readxl)
+library(stringr)
+library(pracma)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r load metadata}
+
+# metadata
+metadata_counts <- read.csv("data/Pacific_oyster/resazurin/metadata_larvae_counts.csv", sep=',')
+plate_notes     <- metadata_counts %>%  dplyr::select(c('PlateID','Well','Note','X')) %>% dplyr::rename(obs_volume = X)
+families        <- read.csv("data/Pacific_oyster/YC26-ebv-crosses-broodpops.csv", sep=',') %>% dplyr::rename(Family = cross)
+
+```
+
+```{r call raw file folders}
+resaz_72hpf_filenames <- list.files("data/Pacific_oyster/resazurin/20260320_72hpf/", pattern = "\\.xlsx$", full.names = TRUE)
+resaz_72hpf_filenames
+
+#  [1] "Data/20260320_72hpf/Resaz_plate1_high_T0_260320_131142.xlsx" "Data/20260320_72hpf/Resaz_plate1_high_T1_260320_1424.xlsx"  
+#  [3] "Data/20260320_72hpf/Resaz_plate1_high_T2_260320_1529.xlsx"   "Data/20260320_72hpf/Resaz_plate1_high_T3_260320_1640.xlsx"  
+#  [5] "Data/20260320_72hpf/Resaz_plate1_high_T4_260320_1747.xlsx"   "Data/20260320_72hpf/Resaz_plate1_low_T0_260320_1328.xlsx"   
+#  [7] "Data/20260320_72hpf/Resaz_plate1_low_T1_260320_1436.xlsx"    "Data/20260320_72hpf/Resaz_plate1_low_T2_260320_1542.xlsx"   
+#  [9] "Data/20260320_72hpf/Resaz_plate1_low_T3_260320_1649.xlsx"    "Data/20260320_72hpf/Resaz_plate1_low_T4_260320_1758.xlsx"   
+# [11] "Data/20260320_72hpf/Resaz_plate2_high_T0_260320_1316.xlsx"   "Data/20260320_72hpf/Resaz_plate2_high_T1_260320_1420.xlsx"  
+# [13] "Data/20260320_72hpf/Resaz_plate2_high_T2_260320_1532.xlsx"   "Data/20260320_72hpf/Resaz_plate2_high_T3_260320_1637.xlsx"  
+# [15] "Data/20260320_72hpf/Resaz_plate2_high_T4_260320_1743.xlsx"   "Data/20260320_72hpf/Resaz_plate2_low_T0_260320_1331.xlsx"   
+# [17] "Data/20260320_72hpf/Resaz_plate2_low_T1_260320_1433.xlsx"    "Data/20260320_72hpf/Resaz_plate2_low_T2_260320_1544.xlsx"   
+# [19] "Data/20260320_72hpf/Resaz_plate2_low_T3_260320_1653.xlsx"    "Data/20260320_72hpf/Resaz_plate2_low_T4_260320_1754.xlsx" 
+
+
+resaz_15dpf_filenames <- list.files("data/Pacific_oyster/resazurin/20260401_15dpf/", pattern = "\\.xlsx$", full.names = TRUE)
+resaz_15dpf_filenames
+
+
+resaz_48dpf_filenames <- list.files("data/Pacific_oyster/resazurin/20260504_48dpf/", pattern = "\\.xlsx$", full.names = TRUE)
+resaz_48dpf_filenames
+
+```
+
+
+```{r list files in each folder}
+# Read each file into a named list
+xlsx_list_72hpf <- setNames(
+                      lapply(resaz_72hpf_filenames, read_excel),
+                      str_remove(basename(resaz_72hpf_filenames), "\\.xlsx$")
+             )
+
+
+xlsx_list_15dpf <- setNames(
+                      lapply(resaz_15dpf_filenames, read_excel),
+                      str_remove(basename(resaz_15dpf_filenames), "\\.xlsx$")
+             )
+
+xlsx_list_48dpf <- setNames(
+                      lapply(resaz_48dpf_filenames, read_excel),
+                      str_remove(basename(resaz_48dpf_filenames), "\\.xlsx$")
+             )
+
+
+
+```
+
+```{r call the convert_to_df function}
+source("scripts/convert_to_df.R")
+```
+
+
+
+```{r 72 hpf compile raw data}
+
+loop.df           <- data.frame(matrix(nrow = 1, ncol = 8)) # create dataframe to save cumunalitively during for loop
+colnames(loop.df) <- c('filename', 'time', 'timepoint', 'Plate_row', 'Plate_col', 'Well', 'plate', 'flourescence') # names for columns in the for loop
+rbind.df          <- data.frame() # start dataframe 
+for (i in 1:length(resaz_72hpf_filenames)) {
+  
+ x         <- (basename(resaz_72hpf_filenames[i]))
+ x.2       <- sub("\\.xlsx$", "", noquote(x))
+ loop.df   <- covert_to_df(xlsx_list_72hpf[[x.2]])
+ 
+ rbind.df <- rbind(rbind.df,
+                     loop.df) #bind to a cumulative list dataframe
+ print(rbind.df) # print to monitor progress
+  
+}
+
+
+rbind.df_72hpf <- rbind.df %>% 
+                    dplyr::mutate(Date = 20260320,
+                                  Treatment = dplyr::case_when(gsub("^(?:[^_]*_){2}([^_]*).*", "\\1",filename) == "low" ~ "26C",
+                                                        gsub("^(?:[^_]*_){2}([^_]*).*", "\\1",filename) == "high" ~ "38C"),
+                                  PlateID = gsub("^[^_]+_([^_]+_[^_]+)_.*", "\\1", filename))
+
+data_merged_72hpf <- dplyr::left_join(rbind.df_72hpf,metadata_counts, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
+
+```
+
+```{r 72 hpf output}
+write.csv(data_merged_72hpf,  "output/raw/resazurin/rawdf_72hpf.csv")
+```
+
+
+
+```{r 15 dpf compile raw data}
+loop.df           <- data.frame(matrix(nrow = 1, ncol = 8)) # create dataframe to save cumunalitively during for loop
+colnames(loop.df) <- c('filename', 'time', 'timepoint', 'Plate_row', 'Plate_col', 'Well', 'plate', 'flourescence') # names for columns in the for loop
+rbind.df          <- data.frame() # start dataframe 
+for (i in 1:length(resaz_15dpf_filenames)) {
+  
+ x         <- (basename(resaz_15dpf_filenames[i]))
+ x.2       <- sub("\\.xlsx$", "", noquote(x))
+ loop.df   <- covert_to_df(xlsx_list_15dpf[[x.2]])
+ 
+ rbind.df <- rbind(rbind.df,
+                     loop.df) #bind to a cumulative list dataframe
+ print(rbind.df) # print to monitor progress
+  
+}
+
+
+rbind.df_15dpf <- rbind.df %>% 
+                    dplyr::mutate(Date = 20260401,
+                                  Treatment = dplyr::case_when(plate == 1 ~ "26C",
+                                                        plate == 2 ~ "30C",
+                                                        plate == 3 ~ "34C",
+                                                        plate == 4 ~ "38C"),
+                                  PlateID = dplyr::case_when(plate == 1 ~ "plate_1_26",
+                                                        plate == 2 ~ "plate_2_30",
+                                                        plate == 3 ~ "plate_3_34",
+                                                        plate == 4 ~ "plate_4_38"))
+rbind.df_15dpf$time
+data_merged_15dpf <- dplyr::left_join(rbind.df_15dpf,metadata_counts, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
+
+```
+
+
+```{r 15 dpf output}
+write.csv(data_merged_15dpf,  "output/resazurin/raw/rawdf_15dpf.csv")
+```
+
+
+```{r 48 dpf compile raw data}
+loop.df           <- data.frame(matrix(nrow = 1, ncol = 8)) # create dataframe to save cumunalitively during for loop
+colnames(loop.df) <- c('filename', 'time', 'timepoint', 'Plate_row', 'Plate_col', 'Well', 'plate', 'flourescence') # names for columns in the for loop
+rbind.df          <- data.frame() # start dataframe 
+for (i in 1:length(resaz_48dpf_filenames)) {
+  
+ x         <- (basename(resaz_48dpf_filenames[i]))
+ x.2       <- sub("\\.xlsx$", "", noquote(x))
+ loop.df   <- covert_to_df(xlsx_list_48dpf[[x.2]])
+ 
+ rbind.df <- rbind(rbind.df,
+                     loop.df) #bind to a cumulative list dataframe
+ print(rbind.df) # print to monitor progress
+  
+}
+
+
+rbind.df_48dpf <- rbind.df %>% # note, the names of the files differ from the previous time;oint, so made adjustments here
+                    dplyr::mutate(Date = 20260504,
+                                  Treatment = dplyr::case_when(
+                                                        grepl("26C", plate, ignore.case = TRUE) ~ "26C", # I assumed plates 1-4 are in line with temp, checl with Anna
+                                                        grepl("30C", plate, ignore.case = TRUE) ~ "30C",
+                                                        grepl("34C", plate, ignore.case = TRUE) ~ "34C",
+                                                        grepl("38C", plate, ignore.case = TRUE) ~ "38C"),
+                                  PlateID = dplyr::case_when(
+                                                        grepl("26C", plate, ignore.case = TRUE) ~ "plate_1_26",
+                                                        grepl("30C", plate, ignore.case = TRUE) ~ "plate_2_30",
+                                                        grepl("34C", plate, ignore.case = TRUE) ~"plate_3_34",
+                                                        grepl("38C", plate, ignore.case = TRUE) ~ "plate_4_38"))
+
+
+
+data_merged_48dpf <- dplyr::left_join(rbind.df_48dpf,metadata_counts, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
+
+
+```
+
+
+```{r 48 dpf output}
+write.csv(data_merged_48dpf,  "output/resazurin/raw/rawdf_48dpf.csv")
+```

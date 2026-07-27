@@ -1,0 +1,236 @@
+---
+title: "1_mito_stress_analysis"
+author: "Samuel Gurr"
+date: "2026-03-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# SET WORKING DIRECTORY 
+knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's
+#knitr::opts_knit$set(root.dir = "C:/Users/samuel.gurr/Documents/Github_repositories/EAD-ASEB-Airradians_Popgen_OA/") # Sam's
+```
+
+
+```{r}
+library(readxl)
+library(stringr)
+library(pracma)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r load data}
+
+seahorse_25C  <- read.csv("data/Eastern_oyster/seahorse/OCR_Data_norm_AARot_25oC.csv", sep=',', head=T, check.names = FALSE)
+
+seahorse_34C  <- read.csv("data/Eastern_oyster/seahorse/OCR_Data_norm_AARot_34oC.csv", sep=',', head=T, check.names = FALSE)
+
+```
+
+```{r}
+names(seahorse_25C)[1] <- "paradigm"
+seahorse_25C$paradigm[seahorse_25C$paradigm == ""] <- NA
+seahorse_25C$paradigm <- zoo::na.locf(seahorse_25C$paradigm)
+
+seahorse_25C.clean <- janitor::remove_empty(seahorse_25C, which = "cols")
+# Remove the dot and everything after it
+names(seahorse_25C.clean) <- sub("\\..*", "", names(seahorse_25C.clean))
+
+
+
+names(seahorse_34C)[1] <- "paradigm"
+seahorse_34C$paradigm[seahorse_34C$paradigm == ""] <- NA
+seahorse_34C$paradigm <- zoo::na.locf(seahorse_34C$paradigm)
+
+seahorse_34C.clean <- janitor::remove_empty(seahorse_34C, which = "cols")
+# Remove the dot and everything after it
+names(seahorse_34C.clean) <- sub("\\..*", "", names(seahorse_34C.clean))
+
+
+```
+
+```{r shape wide to long}
+
+
+# 3. Reshape from wide to long and create a tally column
+long_data_25C <- seahorse_25C.clean %>%
+                    tidyr::pivot_longer(
+                      cols = starts_with(c("2", "3")), 
+                      names_to = "Family_ID", 
+                      values_to = "O2"
+                    ) %>%
+                    dplyr::rename(Time_min = `Time (minutes)`) %>% 
+                    # Create a sequence tally for each repeated group
+                    group_by(paradigm, Time_min) %>%
+                    mutate(tally = dplyr::row_number(),
+                           Family_ID = sub("\\..*", "", Family_ID)) %>% 
+                    dplyr::ungroup()
+
+
+long_data_25C_MeanSE <- Rmisc::summarySE(long_data_25C, measurevar = "O2", groupvars = c("Time_min", "paradigm", "Family_ID"))
+
+
+
+# 3. Reshape from wide to long and create a tally column
+long_data_34C <- seahorse_34C.clean %>%
+                    tidyr::pivot_longer(
+                      cols = starts_with(c("2", "3")), 
+                      names_to = "Family_ID", 
+                      values_to = "O2"
+                    ) %>%
+                    dplyr::rename(Time_min = `Time (minutes)`) %>% 
+                    # Create a sequence tally for each repeated group
+                    group_by(paradigm, Time_min) %>%
+                    mutate(tally = dplyr::row_number()) %>% 
+                    dplyr::ungroup()
+
+long_data_34C$O2       <- as.numeric(long_data_34C$O2)
+long_data_34C$Time_min <- as.numeric(long_data_34C$Time_min)
+long_data_34C_MeanSE <- Rmisc::summarySE(long_data_34C, measurevar = "O2", groupvars = c("Time_min", "paradigm", "Family_ID"))
+
+```
+
+
+```{r view plots 25C}
+
+Plot_MEANSe_25C <- ggplot(long_data_25C, aes(x = Time_min, 
+                                             y = O2, 
+                                             colour = Family_ID, 
+                                             group = Family_ID)) +
+                          stat_summary(fun = mean, geom = "line") +
+                          stat_summary(fun = mean, geom = "point", size = 2) +
+                          stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1) + 
+                          theme_bw()
+
+rects_25C <- long_data_25C %>%
+  group_by(paradigm) %>%
+  dplyr::summarize(
+            start = min(Time_min),
+            end = max(Time_min)
+    )
+
+ggplot() +
+  # 1. Add background shading
+  geom_rect(data = rects_25C, 
+            aes(xmin = start - 0.5, xmax = end + 0.5, 
+                ymin = -Inf, ymax = Inf, fill = paradigm), 
+            alpha = 0.3) +
+  # Add the mean and SE points/errorbars on top
+  geom_point(
+    data = long_data_25C_MeanSE, 
+    aes(x = Time_min, y = O2, fill = "Family_ID"), 
+    size = 4
+  ) +
+  geom_line(
+    data = long_data_25C_MeanSE, 
+    aes(x = Time_min, y = O2, fill = "Family_ID")) +
+  geom_errorbar(
+    data = long_data_25C_MeanSE, 
+    aes(x = Time_min, ymin = se, ymax = se), 
+    width = 0.2, linewidth = 1, group = "Family_ID"
+  ) +
+  # Formatting and labels
+  theme_classic()
+
+```
+
+
+```{r view plots 34C}
+
+Plot_MEANSe_34C <- ggplot(long_data_34C, aes(x = Time_min, 
+                                             y = O2, 
+                                             colour = Family_ID, 
+                                             group = Family_ID)) +
+                            stat_summary(fun = mean, geom = "line") +
+                            stat_summary(fun = mean, geom = "point", size = 2) +
+                            stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1) + 
+                            theme_bw()
+
+rects_34C <- long_data_34C %>%
+  group_by(paradigm) %>%
+  dplyr::summarize(
+            start = min(Time_min),
+            end = max(Time_min)
+    )
+
+ggplot() +
+  # 1. Add background shading
+  geom_rect(data = rects_34C, 
+            aes(xmin = start - 0.5, xmax = end + 0.5, 
+                ymin = -Inf, ymax = Inf, fill = paradigm), 
+            alpha = 0.3) +
+  # Add the mean and SE points/errorbars on top
+  geom_point(
+    data = long_data_34C_MeanSE, 
+    aes(x = Time_min, y = O2, fill = "Family_ID"), 
+    size = 4
+  ) +
+  geom_line(
+    data = long_data_34C_MeanSE, 
+    aes(x = Time_min, y = O2, fill = "Family_ID")) +
+  geom_errorbar(
+    data = long_data_34C_MeanSE, 
+    aes(x = Time_min, ymin = se, ymax = se), 
+    width = 0.2, linewidth = 1, group = "Family_ID"
+  ) +
+  # Formatting and labels
+  theme_classic()
+
+```
+
+```{r}
+
+seahorse_34C.clean
+
+
+# 3. Reshape from wide to long and create a tally column
+long_data <- seahorse_34C.clean %>%
+                    tidyr::pivot_longer(
+                      cols = starts_with(c("2", "3")), 
+                      names_to = "Family_ID", 
+                      values_to = "O2"
+                    ) %>%
+                    # Create a sequence tally for each repeated group
+                    group_by(paradigm, `Time (minutes)`) %>%
+                    mutate(tally = dplyr::row_number(),
+                           Family_ID = sub("\\..*", "", Family_ID)) %>% 
+                    dplyr::ungroup()
+```
+
+```{r}
+
+ggarrange(
+  Plot_MEANSe_25C,
+  Plot_MEANSe_34C,
+  nrow = 2
+)
+```
+
+### Calculations and target values 
+
+  * **Baseline** - initial measurements, once cycles staballize and before  Olgo
+  
+  * **Maximal respiration** - (after FCCP injection) - (Non-mitochondrial O2 consumption ater Rot/AA) 
+  
+  * **Spare capacity** - (Maximal respiration) - (Baseline)
+  
+  * **ATP-linked respiration** - (Basal respiration) - (OCR after Oligo stabalizes)
+  
+  * **Proton leak** - (OCR after Oligo stabalizes) - (Non-mitochondrial O2 consumption ater Rot/AA) 
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
