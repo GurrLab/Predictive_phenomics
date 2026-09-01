@@ -5,6 +5,15 @@ date: "2026-03-21"
 output: html_document
 ---
 
+```{r}
+library(readxl)
+library(stringr)
+library(pracma)
+library(ggplot2)
+library(ggpubr)
+library(car)
+```
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 # SET WORKING DIRECTORY 
@@ -12,14 +21,6 @@ knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/
 #knitr::opts_knit$set(root.dir = "C:/Users/samuel.gurr/Documents/Github_repositories/EAD-ASEB-Airradians_Popgen_OA/") # Sam's
 ```
 
-
-```{r}
-library(readxl)
-library(stringr)
-library(pracma)
-library(ggplot2)
-library(ggpubr)
-```
 
 ```{r load data}
 
@@ -86,6 +87,9 @@ long_data_34C <- seahorse_34C.clean %>%
                     mutate(tally = dplyr::row_number()) %>% 
                     dplyr::ungroup()
 
+
+long_data_34C <- long_data_34C %>% dplyr::filter(!Family_ID %in% "251") # the only family that does not have any viable data at 25C, omit for comarison
+
 long_data_34C$O2       <- as.numeric(long_data_34C$O2)
 long_data_34C$Time_min <- as.numeric(long_data_34C$Time_min)
 long_data_34C_MeanSE <- Rmisc::summarySE(long_data_34C, measurevar = "O2", groupvars = c("Time_min", "paradigm", "Family_ID"))
@@ -101,38 +105,39 @@ Plot_MEANSe_25C <- ggplot(long_data_25C, aes(x = Time_min,
                                              group = Family_ID)) +
                           stat_summary(fun = mean, geom = "line") +
                           stat_summary(fun = mean, geom = "point", size = 2) +
-                          stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1) + 
+                          stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1)  + 
+                          scale_x_continuous(breaks = seq(0, 300, by = 25)) +
                           theme_bw()
 
-rects_25C <- long_data_25C %>%
-  group_by(paradigm) %>%
-  dplyr::summarize(
-            start = min(Time_min),
-            end = max(Time_min)
-    )
-
-ggplot() +
-  # 1. Add background shading
-  geom_rect(data = rects_25C, 
-            aes(xmin = start - 0.5, xmax = end + 0.5, 
-                ymin = -Inf, ymax = Inf, fill = paradigm), 
-            alpha = 0.3) +
-  # Add the mean and SE points/errorbars on top
-  geom_point(
-    data = long_data_25C_MeanSE, 
-    aes(x = Time_min, y = O2, fill = "Family_ID"), 
-    size = 4
-  ) +
-  geom_line(
-    data = long_data_25C_MeanSE, 
-    aes(x = Time_min, y = O2, fill = "Family_ID")) +
-  geom_errorbar(
-    data = long_data_25C_MeanSE, 
-    aes(x = Time_min, ymin = se, ymax = se), 
-    width = 0.2, linewidth = 1, group = "Family_ID"
-  ) +
-  # Formatting and labels
-  theme_classic()
+# rects_25C <- long_data_25C %>%
+#   group_by(paradigm) %>%
+#   dplyr::summarize(
+#             start = min(Time_min),
+#             end = max(Time_min)
+#     )
+# 
+# ggplot() +
+#   # 1. Add background shading
+#   geom_rect(data = rects_25C, 
+#             aes(xmin = start - 0.5, xmax = end + 0.5, 
+#                 ymin = -Inf, ymax = Inf, fill = paradigm), 
+#             alpha = 0.3) +
+#   # Add the mean and SE points/errorbars on top
+#   geom_point(
+#     data = long_data_25C_MeanSE, 
+#     aes(x = Time_min, y = O2, fill = "Family_ID"), 
+#     size = 4
+#   ) +
+#   geom_line(
+#     data = long_data_25C_MeanSE, 
+#     aes(x = Time_min, y = O2, fill = "Family_ID")) +
+#   geom_errorbar(
+#     data = long_data_25C_MeanSE, 
+#     aes(x = Time_min, ymin = se, ymax = se), 
+#     width = 0.2, linewidth = 1, group = "Family_ID"
+#   ) +
+#   # Formatting and labels
+#   theme_classic()
 
 ```
 
@@ -146,39 +151,11 @@ Plot_MEANSe_34C <- ggplot(long_data_34C, aes(x = Time_min,
                             stat_summary(fun = mean, geom = "line") +
                             stat_summary(fun = mean, geom = "point", size = 2) +
                             stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1) + 
+                            scale_x_continuous(breaks = seq(0, 300, by = 25)) +
                             theme_bw()
 
-rects_34C <- long_data_34C %>%
-  group_by(paradigm) %>%
-  dplyr::summarize(
-            start = min(Time_min),
-            end = max(Time_min)
-    )
-
-ggplot() +
-  # 1. Add background shading
-  geom_rect(data = rects_34C, 
-            aes(xmin = start - 0.5, xmax = end + 0.5, 
-                ymin = -Inf, ymax = Inf, fill = paradigm), 
-            alpha = 0.3) +
-  # Add the mean and SE points/errorbars on top
-  geom_point(
-    data = long_data_34C_MeanSE, 
-    aes(x = Time_min, y = O2, fill = "Family_ID"), 
-    size = 4
-  ) +
-  geom_line(
-    data = long_data_34C_MeanSE, 
-    aes(x = Time_min, y = O2, fill = "Family_ID")) +
-  geom_errorbar(
-    data = long_data_34C_MeanSE, 
-    aes(x = Time_min, ymin = se, ymax = se), 
-    width = 0.2, linewidth = 1, group = "Family_ID"
-  ) +
-  # Formatting and labels
-  theme_classic()
-
 ```
+
 
 ```{r}
 
@@ -186,17 +163,36 @@ seahorse_34C.clean
 
 
 # 3. Reshape from wide to long and create a tally column
-long_data <- seahorse_34C.clean %>%
-                    tidyr::pivot_longer(
-                      cols = starts_with(c("2", "3")), 
-                      names_to = "Family_ID", 
-                      values_to = "O2"
-                    ) %>%
-                    # Create a sequence tally for each repeated group
-                    group_by(paradigm, `Time (minutes)`) %>%
-                    mutate(tally = dplyr::row_number(),
-                           Family_ID = sub("\\..*", "", Family_ID)) %>% 
-                    dplyr::ungroup()
+long_data_25C.clean <- seahorse_25C.clean %>%
+                            tidyr::pivot_longer(
+                              cols = starts_with(c("2", "3")), 
+                              names_to = "Family_ID", 
+                              values_to = "O2"
+                            ) %>%
+                            # Create a sequence tally for each repeated group
+                            group_by(paradigm, `Time (minutes)`) %>%
+                            mutate(tally = dplyr::row_number(),
+                                   Family_ID = sub("\\..*", "", Family_ID)) %>% 
+                            dplyr::ungroup()
+
+
+
+# 3. Reshape from wide to long and create a tally column
+long_data_34C.clean <- seahorse_34C.clean %>%
+                            tidyr::pivot_longer(
+                              cols = starts_with(c("2", "3")), 
+                              names_to = "Family_ID", 
+                              values_to = "O2"
+                            ) %>%
+                            # Create a sequence tally for each repeated group
+                            group_by(paradigm, `Time (minutes)`) %>%
+                            mutate(tally = dplyr::row_number(),
+                                   Family_ID = sub("\\..*", "", Family_ID)) %>% 
+                            dplyr::ungroup()
+
+long_data_34C.clean <- long_data_34C.clean %>% dplyr::filter(!Family_ID %in% "251") # the only family that does not have any viable data at 25C, omit for comarison
+
+
 ```
 
 ```{r}
@@ -220,17 +216,415 @@ ggarrange(
   
   * **Proton leak** - (OCR after Oligo stabalizes) - (Non-mitochondrial O2 consumption ater Rot/AA) 
 
-```{r}
+
+```{r Cals 25C}
+
+# Minutes 50-60 =  **Baseline** - initial measurements, three cycles when stabilized BEFORE Olgo
+
+# Minutes 160-175 = **Oligo** three cycles when stabilized AFTER Olgo
+ 
+# Minutes 187-208 * **MaxResp** = Maximal respiration** - (after FCCP injection) - (Non-mitochondrial O2 consumption AFTER Rot/AA) 
+ 
+# Minutes Minutes 258-280 = **NonMito** Non-mitochondrial** O2 consumption AFTER Rot/AA
+
+
+# * **Spare capacity** - (Maximal respiration) - (Basal respiration) = (MaxResp) - (Baseline)
+ 
+# * **ATP-linked respiration** - (Basal respiration) - (OCR after Oligo stabalizes) = (Oligo) - (Baseline)
+ 
+# * **Proton leak** - (OCR after Oligo stabalizes) - (Non-mitochondrial O2 consumption AFTER Rot/AA)  = (Oligo) - (NonMito)
+
+
+long_data_25C.clean$`Time (minutes)` = as.numeric(long_data_25C.clean$`Time (minutes)`)
+long_data_25C.clean$O2 = as.numeric(long_data_25C.clean$O2)
+
+
+
+Baseline_25C = long_data_25C.clean %>% 
+                          dplyr::filter(`Time (minutes)` > 49 & `Time (minutes)` < 68) 
+
+Oligo_25C = long_data_25C.clean %>% 
+                          dplyr::filter(`Time (minutes)` > 160 & `Time (minutes)` < 178 )
+
+MaxResp_25C = long_data_25C.clean %>% 
+                          dplyr::filter(`Time (minutes)` > 187 & `Time (minutes)` < 208 ) 
+
+NonMito_25C = long_data_25C.clean %>% 
+                          dplyr::filter(`Time (minutes)` > 258 & `Time (minutes)` < 280)
+
+
+CalcMaster_25C <- rbind(Baseline_25C,
+                        Oligo_25C,
+                        MaxResp_25C,
+                        NonMito_25C) %>% 
+                          dplyr::group_by(paradigm, Family_ID, tally) %>%
+                          dplyr::summarise(
+                            meanO2 = mean(O2, na.rm = TRUE),
+                            seO2  = sd(O2, na.rm = TRUE) / sqrt(dplyr::n()),
+                            n = dplyr::n(),
+                            .groups  = "drop"
+                          )
+
+CalcMaster_25C$meanO2 <- as.numeric(CalcMaster_25C$meanO2)
+
+
+CalcMaster_25C.final <- CalcMaster_25C %>% 
+                  dplyr::select(-c(seO2, n)) %>% 
+                  tidyr::pivot_wider(
+                              names_from = paradigm,    # Column containing names for the new columns
+                              values_from = meanO2     # Column containing values to fill the cells
+                            ) %>% 
+                  dplyr::mutate(
+                    SpareCapacity = (`FCCP 2uM`) - (Baseline),
+                    ATPLinked     = (`Oligo 10uM`) - (Baseline),
+                    ProtonLeak    = (`Oligo 10uM`) - (`AA/Rot 12/6uM`)
+                    ) %>% 
+                  dplyr::rename(
+                    MaxResp = `FCCP 2uM`,
+                    Oligo = `Oligo 10uM`,
+                    NonMitoResp = `AA/Rot 12/6uM`
+                    ) %>% 
+                  tidyr::pivot_longer(
+                              cols = -c(Family_ID, tally),
+                              names_to = "Metric",    # Column containing names for the new columns
+                              values_to = "O2"     # Column containing values to fill the cells
+                            ) %>% 
+                  dplyr::mutate(Temperature = "25 Celcius")
+
+Plot_Calcs_25C <- ggplot((CalcMaster_25C.final %>% dplyr::filter(!Metric %in% "Oligo")), 
+                        aes(x = Family_ID, y = O2, shape = Metric)) +
+                        # 1. Plot the group means as points
+                        stat_summary(fun = mean, geom = "point", size = 3) +
+                        # 2. Add the Standard Error bars automatically
+                        stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
+                        theme_bw() + 
+                        labs(title = "Mito Stress @ 25C") +
+                        facet_wrap(~Metric, scales = "free_y")
 
 
 ```
 
-```{r}
+
+```{r Calcs 34C}
+# Minutes 50-60 =  **Baseline** - initial measurements, three cycles when stabilized BEFORE Olgo
+
+# Minutes 160-175 = **Oligo** three cycles when stabilized AFTER Olgo
+ 
+# Minutes 187-208 * **MaxResp** = Maximal respiration** - (after FCCP injection) - (Non-mitochondrial O2 consumption AFTER Rot/AA) 
+ 
+# Minutes Minutes 258-280 = **NonMito** Non-mitochondrial** O2 consumption AFTER Rot/AA
+
+
+# * **Spare capacity** - (Maximal respiration) - (Basal respiration) = (MaxResp) - (Baseline)
+ 
+# * **ATP-linked respiration** - (Basal respiration) - (OCR after Oligo stabalizes) = (Oligo) - (Baseline)
+ 
+# * **Proton leak** - (OCR after Oligo stabalizes) - (Non-mitochondrial O2 consumption AFTER Rot/AA)  = (Oligo) - (NonMito)
+
+
+long_data_34C.clean$`Time (minutes)` = as.numeric(long_data_34C.clean$`Time (minutes)`)
+long_data_34C.clean$O2 = as.numeric(long_data_34C.clean$O2)
+
+
+
+Baseline_34C = long_data_34C.clean %>% 
+                          dplyr::filter(`Time (minutes)` > 49 & `Time (minutes)` < 68) 
+
+Oligo_34C = long_data_34C.clean %>% 
+                          dplyr::filter(`Time (minutes)` > 160 & `Time (minutes)` < 178 )
+
+MaxResp_34C = long_data_34C.clean %>% 
+                          dplyr::filter(`Time (minutes)` > 187 & `Time (minutes)` < 208 ) 
+
+NonMito_34C = long_data_34C.clean %>% 
+                          dplyr::filter(`Time (minutes)` > 258 & `Time (minutes)` < 280)
+
+
+CalcMaster_34C <- rbind(Baseline_34C,
+                        Oligo_34C,
+                        MaxResp_34C,
+                        NonMito_34C) %>% 
+                          dplyr::group_by(paradigm, Family_ID, tally) %>%
+                          dplyr::summarise(
+                            meanO2 = mean(O2, na.rm = TRUE),
+                            seO2  = sd(O2, na.rm = TRUE) / sqrt(dplyr::n()),
+                            n = dplyr::n(),
+                            .groups  = "drop"
+                          )
+
+CalcMaster_34C$meanO2 <- as.numeric(CalcMaster_34C$meanO2)
+
+
+CalcMaster_34C.final <- CalcMaster_34C %>% 
+                  dplyr::select(-c(seO2, n)) %>% 
+                  tidyr::pivot_wider(
+                              names_from = paradigm,    # Column containing names for the new columns
+                              values_from = meanO2     # Column containing values to fill the cells
+                            ) %>% 
+                  dplyr::mutate(
+                    SpareCapacity = (`FCCP 2uM`) - (Baseline),
+                    ATPLinked     = (`Oligo 10uM`) - (Baseline),
+                    ProtonLeak    = (`Oligo 10uM`) - (`AA/Rot 12/6uM`)
+                    ) %>% 
+                  dplyr::rename(
+                    MaxResp = `FCCP 2uM`,
+                    Oligo = `Oligo 10uM`,
+                    NonMitoResp = `AA/Rot 12/6uM`
+                    ) %>% 
+                  tidyr::pivot_longer(
+                              cols = -c(Family_ID, tally),
+                              names_to = "Metric",    # Column containing names for the new columns
+                              values_to = "O2"     # Column containing values to fill the cells
+                            ) %>% 
+                  dplyr::mutate(Temperature = "34 Celcius")
+
+Plot_Calcs_34C <- ggplot((CalcMaster_34C.final %>% dplyr::filter(!Metric %in% "Oligo")), 
+                        aes(x = Family_ID, y = O2, shape = Metric)) +
+                        # 1. Plot the group means as points
+                        stat_summary(fun = mean, geom = "point", size = 3) +
+                        # 2. Add the Standard Error bars automatically
+                        stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
+                        theme_bw() + 
+                        labs(title = "Mito Stress @ 34C") +
+                        facet_wrap(~Metric, scales = "free_y")
 
 
 ```
 
+
 ```{r}
 
+ggarrange(
+          ggarrange(
+            Plot_MEANSe_25C,
+            Plot_MEANSe_34C,
+            nrow = 1,
+            ncol = 2
+          ), 
+
+          ggarrange(
+            Plot_Calcs_25C,
+            Plot_Calcs_34C,
+            nrow = 1,
+            ncol = 2
+          ),
+          nrow = 2, 
+          ncol = 1
+)
+```
+```{r Statistic function}
+
+
+runanova <- function(datafilename,  outputfilename) {
+            # variables for both for loops
+            DF_loop           <- data.frame(matrix(nrow = 1, ncol = 12)) # create dataframe to save during for loop
+            colnames(DF_loop) <- c('Temperature', 'Metric', 'ShapiroWilk', 'ResidNorm', 
+                                   'Levenes', 'HomogVar', 'model', 
+                                   'DF.num' , 'DF.denom', 
+                                   'F_val','P_val', 'SigDif') # names for comuns in the for loop
+            
+            unique(datafilename$Groupvar)
+            outputfilename <- data.frame()
+
+            for (m in 1:length(unique(datafilename$Metric))) { # call the biodep metrics one by one
+              
+            DPvar_loop <- unique(as.character(datafilename$Metric))
+            Data_DPvar <- datafilename %>% 
+                                dplyr::select(Metric, Groupvar, DPvar, INDvar) %>% 
+                                dplyr::filter(Metric %in%  DPvar_loop[m])
+              
+            
+            for (i in 1:length(unique(Data_DPvar$Groupvar))) {
+              GROUPvar_loop <- unique(Data_DPvar$Groupvar)[i]
+              Data_all      <- Data_DPvar %>% dplyr::filter(Groupvar %in% GROUPvar_loop)
+              # Data_mean   <- Data_all %>% summarySE(measurevar="DPvar", 
+              #                                       groupvars=c("group1","Tank_Replicate", "INDvar")) 
+              
+              AOVmod      <- aov(lm(Data_all$DPvar ~ as.factor(Data_all$INDvar))) # CHANGE HERE!
+              KWmod       <- kruskal.test(Data_all$DPvar  ~ as.factor(Data_all$INDvar)) # CHANGE HERE!
+              
+              # DF_loop$About <- paste0("Gonad: All bfactor + mean by replicate")
+              # DF_loop$About <- paste0("Gonad: All bfactor + all data")  # normality tests for the anova model - asign
+              
+              
+              DF_loop$ShapiroWilk <- shapiro.test(resid(AOVmod))[[2]]
+              DF_loop$ResidNorm   <- if( shapiro.test(resid(AOVmod))[[2]] > 0.05) {
+                  'YES'} else {'NO'}
+              DF_loop$Levenes     <- leveneTest(AOVmod)[[3]][[1]]
+              DF_loop$HomogVar    <- if( leveneTest(AOVmod)[[3]][[1]] > 0.05) {
+                  'YES'} else {'NO'}
+                
+              if(shapiro.test(resid(AOVmod))[[2]] > 0.05 & leveneTest(AOVmod)[[3]][[1]] > 0.05) {
+                    DF_loop$model       <- 'one-way AOV; x ~ treatment'
+                    DF_loop$DF.num      <- summary(AOVmod)[[1]][["Df"]][1]
+                    DF_loop$DF.denom    <- summary(AOVmod)[[1]][["Df"]][2]
+                    DF_loop$F_val       <- summary(AOVmod)[[1]][["F value"]][1]
+                    DF_loop$P_val       <- summary(AOVmod)[[1]][["Pr(>F)"]][1]
+                    DF_loop$SigDif      <- if( (summary(AOVmod)[[1]][["Pr(>F)"]][1]) > 0.05) {
+                      'NO'} else {'YES'}
+            
+                  } else {
+                    DF_loop$model       <- 'kruskal-wallis; x ~ treatment'
+                    DF_loop$DF.num      <- (KWmod)[[2]][["df"]][1]
+                    DF_loop$DF.denom    <- NA
+                    DF_loop$F_val       <- NA
+                    DF_loop$P_val       <- (KWmod)[[3]]
+                    DF_loop$SigDif      <- if( ((KWmod)[[3]]) > 0.05) {
+                      'NO'} else {'YES'}
+                  }
+              DF_loop$Temperature     <- GROUPvar_loop
+              DF_loop$Metric          <- DPvar_loop[m]
+              # asign loop and cumulative output table
+              df                      <- data.frame(DF_loop) # name dataframe for this single row
+              outputfilename <- rbind(outputfilename,DF_loop) #bind to a cumulative list dataframe
+              # print(outputfilename) # print to monitor progress
+              
+             } # m loop
+            } # i loop
+return(outputfilename)
+}
 
 ```
+
+
+```{r run stats 34C}
+MasterFiinal_forStats <- rbind(CalcMaster_25C.final, CalcMaster_34C.final) %>% 
+                              dplyr::select(-tally) %>% 
+                              dplyr::rename(
+                                Groupvar = Temperature, 
+                                DPvar  = O2,
+                                INDvar   = Family_ID
+                              )
+
+
+runanova(MasterFiinal_forStats, anova_output)
+# 34 C significant  for baseline, MAxResp, and ATP linked resp
+```
+
+
+```{r PCA}
+
+# 1. Combine PCA scores with the grouping variable
+pca_34C <- data.frame(value = CalcMaster_34C.final$O2, Metric = CalcMaster_34C.final$Metric)
+
+install.packages("data.frame")
+?pivot_wider
+# FULL NUMERICAL DATASET
+data_D1     <- as.data.frame(CalcMaster_34C.final) %>% # call columns , column 1 is Day, 
+                           dplyr::mutate(row_id = dplyr::row_number()) %>% 
+                           dplyr::select(-c(Temperature, row_id)) %>% #omit columns
+                           tidyr::pivot_wider(names_from = Metric,values_from = O2 )
+                           reshape2::dcast(row_id ~ Metric, value.var = "O2") 
+numerical_data_D1 <- data_D1 %>%  dplyr::select(-c(tally, Family_ID))
+
+familyID_data_D1 <- data_D1 %>%  dplyr::select(Family_ID)
+
+# NORMALIZE DATA
+data_normalized_D1     <- scale(numerical_data_D1)
+
+
+# CORRELATOIN MATRIX AND PLOT IT 
+corr_matrix_D1     <- cor(data_normalized_D1)
+ggcorrplot::ggcorrplot(corr_matrix_D1)
+
+# RUN PCA 
+data.pca_D1 <- princomp(corr_matrix_D1)
+summary(data.pca_D1)
+# Importance of components:
+#                          Comp.1    Comp.2     Comp.3      Comp.4       Comp.5       Comp.6 Comp.7
+# Standard deviation     1.311135 0.4107974 0.25603061 0.111272020 8.062230e-09 4.382955e-09      0
+# Proportion of Variance 0.874508 0.0858468 0.03334667 0.006298551 3.306581e-17 9.772436e-18      0
+# Cumulative Proportion  0.874508 0.9603548 0.99370145 1.000000000 1.000000e+00 1.000000e+00      1
+
+# VIEW PRINCIPLE COMPONENTS 
+data.pca_D1$loadings[, 1:2] # of components 1 and 2! 
+#                   Comp.1     Comp.2
+# NonMitoResp    0.1429498  0.4946832
+# Baseline      -0.5205159  0.1299330
+# MaxResp       -0.3625646 -0.3421803
+# Oligo         -0.3490804 -0.2396364
+# SpareCapacity  0.3062096 -0.5952506
+# ATPLinked      0.4692816 -0.3217000
+# ProtonLeak    -0.3759373 -0.3256975
+
+# we see positibe for ATP and ROS and negative for JC10 and proportion dead 
+
+# EXPLORE LOADINGS 
+data.pca_D1_FConly$loadings[, 1:2] # of components 1 and 2! 
+
+
+# SCREE PLOT 
+factoextra::fviz_eig(data.pca_D1, addlabels = TRUE)
+# bIPLOT 
+factoextra::fviz_pca_var(data.pca_D1, col.var = "black")
+# COSIGN CONTRIBUTION 
+factoextra::fviz_cos2(data.pca_D1, choice = "var", axes = 1:2) # membrane potential and ROS
+
+# BIPLOT WITH COSIGN 
+
+fviz_pca_var(data.pca_D1, col.var = "cos2",
+            gradient.cols = c("green", "orange", "red"),
+            repel = TRUE)
+
+pca_res_D1       <- prcomp(data_normalized_D1, scale. = TRUE)
+# Merge_master_D1  <- Merge_master_OM_D1 %>% dplyr::mutate(pCO2_all = paste0(pCO2_history, " x ", pCO2_exposure))
+
+# vars for plotting
+cols = c('#009E73','#009E73','#009E73',
+         '#E69F00','#E69F00','#E69F00',
+         '#CC79A7','#CC79A7','#CC79A7')
+
+shapes = c(16, 15, 17,
+           16, 15, 17,
+           16, 15, 17)
+
+
+PCAbiplot_D1         <- fviz_pca_biplot(pca_res_D1, 
+                          label="var", 
+                          habillage=Merge_master_D1$pCO2_all) +
+                          ggforce::geom_mark_ellipse(aes(fill = Groups, color = Groups)) +
+
+                          scale_fill_manual(breaks = unique(Merge_master_D1$pCO2_all),
+                                          values = cols)+
+                          scale_colour_manual(breaks = unique(Merge_master_D1$pCO2_all),
+                                          values = cols) +
+                          scale_fill_manual(breaks = unique(Merge_master_D1$pCO2_all),
+                                          values = cols)+
+                          scale_shape_manual(breaks = unique(Merge_master_D1$pCO2_all),
+                                          values = shapes) +
+                          theme_bw() +
+                          xlim(-4, 4) + ylim (-4, 4) +
+                          theme(legend.position = 'bottom') +
+                          ggtitle("Day 1") +
+                          coord_equal() 
+
+
+
+PCAbiplot_D1_exp     <- fviz_pca_biplot(pca_res_D1, 
+                          label="var", 
+                          habillage=familyID_data_D1$Family_ID)
+                          # palette = c("#009E73","#E69F00", "#CC79A7")) + 
+                          ggforce::geom_mark_ellipse(aes(fill = Groups, color = Groups)) +
+                          theme_bw() +
+                          scale_shape_manual(breaks = unique(Merge_master_D1$pCO2_exposure),
+                                          values = c(16, 15, 17)) +  
+                          xlim(-4, 4) + ylim (-4, 4) +
+                          theme(legend.position = 'bottom') +
+                          ggtitle("Day 1: by exposure") +
+                          coord_equal() 
+
+PCAbiplot_D1_history <- fviz_pca_biplot(pca_res_D1, 
+                          label="var", 
+                          habillage=Merge_master_D1$pCO2_history,
+                          palette = c("#009E73","#E69F00", "#CC79A7")) + 
+                          ggforce::geom_mark_ellipse(aes(fill = Groups, color = Groups)) +
+                          theme_bw() +
+                          scale_shape_manual(breaks = unique(Merge_master_D1$pCO2_history),
+                                          values = c(16, 15, 17)) +  
+                          xlim(-4, 4) + ylim (-4, 4) +
+                          theme(legend.position = 'bottom') +
+                          ggtitle("Day 1: by history") +
+                          coord_equal() 
+
+```
+
