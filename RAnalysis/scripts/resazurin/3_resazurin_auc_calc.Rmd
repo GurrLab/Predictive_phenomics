@@ -806,7 +806,7 @@ ADJUSTING FOR GAIN, NORMALIZE TO 65
 ```{r}
 
 0.095*(77-65)
-AUC_calculate_20260630_28C$AUC.df %>% 
+AUC_calculate_20260702_28C.FINAL <-AUC_calculate_20260630_28C$AUC.df %>% 
             dplyr::filter(gain == 77) %>% 
             dplyr::mutate(AUC.BlankShell = (AUC_calculate_20260630_28C$AUCblanks %>% dplyr::filter(gain == 77 & Type %in% 'shell'))$meanAUC,
                           AUC.cor = AUC - AUC.BlankShell
@@ -913,7 +913,7 @@ AOV30C.Family <- aov(
 shapiro.test(resid(AOV30C.Family)) # 0.003699 - N.S,
 kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "30C"))) # 0.007907 - significant
 
-1AOV32C.Family <- aov(
+AOV32C.Family <- aov(
                       lm(
                         AUC.cor ~ Family,
                          data = (Master %>% dplyr::filter(Treatment %in% "32C"))))
