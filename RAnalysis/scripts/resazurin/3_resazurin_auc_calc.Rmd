@@ -30,7 +30,7 @@ families        <- read.csv("data/Pacific_oyster/YC26-ebv-crosses-broodpops.csv"
 
 # outputs from 1_resazurin_raw_compiler
 # life stages during larval development
-rawdf_72hpf         <- read.csv("output/resazurin/raw/rawdf_72hpf.csv") %>% dplyr::select(-Treatment.y) %>% dplyr::rename(Treatment = Treatment.x)
+rawdf_72hpf         <- read.csv("output/resazurin/raw/rawdf_72hpf.csv")
 rawdf_15dpf         <- read.csv("output/resazurin/raw/rawdf_15dpf.csv")
 rawdf_48dpf         <- read.csv("output/resazurin/raw/rawdf_48dpf.csv")
 # temperature ramp experiment
@@ -112,16 +112,15 @@ AUC_calculate <- function (file_in) {
 
 AUC_calculate_TempRamp <- function (file_in) {
 
-                output.df   <- data.frame()
+                output.df            <- data.frame()
+                outputBlanks.df      <- data.frame() # start dataframe 
+                output.cumulative.df <- data.frame() # start dataframe 
                 loop.df_m   <- data.frame(unique(file_in$gain))  # call specific df
                 loop.df_i   <- data.frame(unique(file_in$Well))  # call specific df
                 
                 # Call the cumulative dataframe that we will write to in the for loop below
-                output.cumulative.df <- data.frame() # start dataframe 
-                output.cor.df        <- data.frame() # start dataframe 
-                output.cor.df_final  <- data.frame() # start dataframe 
-                running.df           <- data.frame(matrix(nrow = 1, ncol = 5)) # create dataframe to save cumunalitively during for loop
-                colnames(running.df) <- c('Date', 'PlateID',  'Well',  'AUC', 'gain') # names for columns in the for loop
+                running.df           <- data.frame(matrix(nrow = 1, ncol = 10)) # create dataframe to save cumunalitively during for loop
+                colnames(running.df) <- c('Date', 'Treatment', 'PlateID', 'gain', 'Age', 'Well', 'Family', 'Type', 'Count', 'AUC') # names for columns in the for loop
                 
                 for(m in 1:nrow(loop.df_m)){
                   plate_id      <- file_in %>%   # call specific df !!! change to data_merged_seed34C <METADATA NEEDED FOR THIS!>
@@ -145,37 +144,47 @@ AUC_calculate_TempRamp <- function (file_in) {
                                                                         delta_florescence = flourescence - flourescence[1],
                                                                         AUC = pracma::trapz(
                                                                                             hours, 
-                                                                                            delta_florescence)) %>% 
-                                                          dplyr::select('Date', 'PlateID', 'gain', 'time', 'hours',
-                                                                        'Well',  'AUC', 'delta_florescence')
+                                                                                            delta_florescence)) #%>% 
+                                                          # dplyr::select('Date', 'PlateID', 'gain', 'time', 'hours', 'Type'
+                                                          #               'Well',  'AUC', 'delta_florescence')
                                                 
                             output.cumulative.df <- rbind(output.cumulative.df, 
                                                           well.over.time)
                             
+
                             running.df$Date      <- well.over.time$Date[1]
-                            # running.df$Treatment <- well.over.time$Treatment[1]
+                            running.df$Treatment <- well.over.time$Treatment[1]
                             running.df$PlateID   <- well.over.time$PlateID[1]
-                            # running.df$Age       <- well.over.time$Age[1]
+                            running.df$gain      <- well.over.time$gain[1]
+                            running.df$Age       <- well.over.time$Age[1]
                             running.df$Well      <- well.over.time$Well[1]
                             running.df$Family    <- well.over.time$Family[1]
                             running.df$Type      <- well.over.time$Type[1]
                             running.df$Count     <- well.over.time$Count[1]
                             running.df$AUC       <- well.over.time$AUC[1]
-                            running.df$gain      <- well.over.time$gain[1]
                             
-                             output.df <- rbind(output.df,
-                                               running.df) #bind to a cumulative list dataframe
+                            output.df <- rbind(output.df,
+                                               (running.df %>% dplyr::filter(Type %in% 'Sample'))
+                                               )  #bind to a cumulative list dataframe %>% 
 
-                             
-                             # mean blank AUC by each plate
-                            # mean.AUC.blanks <- mean(
-                            #                          (output.cumulative.df %>% dplyr::filter(Type %in% 'Blank'))$AUC
+                            outputBlanks.df <- rbind(outputBlanks.df,
+                                               (running.df %>% dplyr::filter(Type %in% c('blank', 'shell')))
+                                               )  
+
                             #                         )
                           } # for(i in 1:nrow(loop.df_i)){
 
                 } # for(m in 1:nrow(loop.df_m)){
+            mean.AUC.blanks <- outputBlanks.df %>% 
+                                     dplyr::group_by(Type, gain) %>% 
+                                     dplyr::summarise(
+                                             meanAUC = mean(AUC),
+                                             n = dplyr::n())
                 
-            return(list(dataframe = output.df, output.meanBlank = mean.AUC.blanks))
+            return(list(DeltaFlo.df = output.cumulative.df,
+                        AUC.df      = output.df, 
+                        AUCblanks   = mean.AUC.blanks
+                        ))
 }
 
 
@@ -192,10 +201,64 @@ AUC_calculate_48dpf  <- AUC_calculate(rawdf_48dpf)
 # run function AUC
 AUC_calculate_20260630_28C  <- AUC_calculate_TempRamp(rawdf_20260630_28C)
 AUC_calculate_20260702_30C  <- AUC_calculate_TempRamp(rawdf_20260702_30C)
-AUC_calculate_20260704_32C  <- AUC_calculate_TempRamp(rawdf_20260704_32C) # needs PlateID
+AUC_calculate_20260704_32C  <- AUC_calculate_TempRamp(rawdf_20260704_32C) 
 AUC_calculate_20260706_34C  <- AUC_calculate_TempRamp(rawdf_20260706_34C)
-AUC_calculate_20260710_38C  <- AUC_calculate_TempRamp(rawdf_20260710_38C) # needs PlateID
+AUC_calculate_20260710_38C  <- AUC_calculate_TempRamp(rawdf_20260710_38C) 
 ```
+
+
+
+
+## Plot data 
+
+```{r Plot data}
+
+ggplot(data = AUC_calculate_20260630_28C$DeltaFlo.df,
+    aes(x = time,
+        y = delta_florescence,
+        group = Well,
+        color = Type)) +
+    geom_point() +
+    geom_line() +
+  facet_wrap(~gain)
+
+ggplot(data = AUC_calculate_20260702_30C$DeltaFlo.df,
+    aes(x = time,
+        y = delta_florescence,
+        group = Well,
+        color = Type)) +
+    geom_point() +
+    geom_line() +
+  facet_wrap(~gain)
+
+ggplot(data = AUC_calculate_20260704_32C$DeltaFlo.df,
+    aes(x = time,
+        y = delta_florescence,
+        group = Well,
+        color = Type)) +
+    geom_point() +
+    geom_line() +
+  facet_wrap(~gain)
+
+ggplot(data = AUC_calculate_20260706_34C$DeltaFlo.df,
+    aes(x = time,
+        y = delta_florescence,
+        group = Well,
+        color = Type)) +
+    geom_point() +
+    geom_line() +
+  facet_wrap(~gain)
+
+ggplot(data = AUC_calculate_20260710_38C$DeltaFlo.df,
+    aes(x = time,
+        y = delta_florescence,
+        group = Well,
+        color = Type)) +
+    geom_point() +
+    geom_line() +
+  facet_wrap(~gain)
+```
+
 
 
 ## Clean up data 
@@ -251,7 +314,9 @@ MeanBlanks_72hpf <- AUC_calculate_72hpf.Blanks %>%
 AUC_calculate_72hpf <- merge(AUC_calculate_72hpf.Samples, MeanBlanks_72hpf, by = "PlateID") %>%  # merge by plateID
                                             dplyr::mutate(
                                               AUC.cor = AUC - meanAUC,
-                                              AUC.cor.norm = AUC.cor / Count
+                                              AUC.cor.norm = AUC.cor / Count,
+                                              Family_EBV = dplyr::case_when(Family > 50 ~ 'Low',
+                                                              Family < 20 ~ 'High')
                                             ) %>% 
                                             dplyr::filter(AUC.cor >= 0) %>% # omits negative, AUC samples less than blank
                                             dplyr::select(
@@ -261,6 +326,7 @@ AUC_calculate_72hpf <- merge(AUC_calculate_72hpf.Samples, MeanBlanks_72hpf, by =
                                               "PlateID",
                                               "Well",
                                               "Family",
+                                              "Family_EBV",
                                               "Count",
                                               "AUC",
                                               "AUC.cor",
@@ -699,7 +765,18 @@ AUC_calculate_48dpf.PLOT4 <- ggplot(AUC_calculate_48dpf,
 
 ```
 
+```{r Output CalculatedAUC larvae and early seed}
 
+Master_larvae_seed <- rbind(AUC_calculate_72hpf,
+                            AUC_calculate_15dpf,
+                            AUC_calculate_48dpf)
+
+
+write.csv(Master_larvae_seed, "output/resazurin/calculated/CalulatedAUC_Master_larvae_earlyseed.csv")
+
+
+
+```
 
 ```{r}
 
@@ -712,16 +789,181 @@ ggarrange(
 
 ```
 
+
+## Temperature Ramp
+
+
+#### Master file
+
+
+ADJUSTING FOR GAIN, NORMALIZE TO 65
+  * Going from lower gain to higher
+          AUC * 0.145 for every 1 unit increase in gain 
+  * Going from higher gain to lower
+          AUC * 0.095 for every 1 unit decrease in gain
+          
+          
 ```{r}
+
+0.095*(77-65)
+AUC_calculate_20260630_28C$AUC.df %>% 
+            dplyr::filter(gain == 77) %>% 
+            dplyr::mutate(AUC.BlankShell = (AUC_calculate_20260630_28C$AUCblanks %>% dplyr::filter(gain == 77 & Type %in% 'shell'))$meanAUC,
+                          AUC.cor = AUC - AUC.BlankShell
+            )
+                          
+AUC_calculate_20260702_30C.FINAL <- merge(AUC_calculate_20260702_30C$AUC.df,
+                                    (as.data.frame(AUC_calculate_20260702_30C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') %>% dplyr::select('gain', 'meanAUC')),
+                                    by = 'gain') %>% 
+                                          dplyr::rename(AUC.BlankShell = meanAUC) %>% 
+                                          dplyr::mutate(AUC.cor = AUC - AUC.BlankShell) %>% 
+                                          dplyr::filter(gain == 65)
+                                  
+                     
+AUC_calculate_20260704_32C.FINAL <- merge(AUC_calculate_20260704_32C$AUC.df,
+                                    (as.data.frame(AUC_calculate_20260704_32C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') %>% dplyr::select('gain', 'meanAUC')),
+                                    by = 'gain') %>% 
+                                          dplyr::rename(AUC.BlankShell = meanAUC) %>% 
+                                          dplyr::mutate(AUC.cor = AUC - AUC.BlankShell)
+
+
+AUC_calculate_20260706_34C.FINAL <- merge(AUC_calculate_20260706_34C$AUC.df,
+                                    (as.data.frame(AUC_calculate_20260706_34C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') %>% dplyr::select('gain', 'meanAUC')),
+                                    by = 'gain') %>% 
+                                          dplyr::rename(AUC.BlankShell = meanAUC) %>% 
+                                          dplyr::mutate(AUC.cor = AUC - AUC.BlankShell) %>% 
+                                          dplyr::filter(gain == 65)
+
+
+
+0.145 * (65-60)
+AUC_calculate_20260710_38C.FINAL <- merge(AUC_calculate_20260710_38C$AUC.df,
+                                    (as.data.frame(AUC_calculate_20260710_38C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') %>% dplyr::select('gain', 'meanAUC')),
+                                    by = 'gain') %>% 
+                                          dplyr::rename(AUC.BlankShell = meanAUC) %>% 
+                                          dplyr::mutate(AUC.cor = (AUC - AUC.BlankShell)*1.725) # convert to 65 gain
+
+
+```
+
+```{r  Output CalculatedAUC juvenile TempRamp}
+Master <- rbind(AUC_calculate_20260702_30C.FINAL,
+      AUC_calculate_20260704_32C.FINAL,
+      AUC_calculate_20260706_34C.FINAL,
+      AUC_calculate_20260710_38C.FINAL)
+
+write.csv(Master, "output/resazurin/calculated/CalulatedAUC_Master_TempRamp.csv")
 
 
 
 ```
 
-```{r}
+
+```{r plotting juvenile TempRamp}
+Master_meansFamily <- Master %>% 
+                        dplyr::group_by(Date, Treatment, Family, Age) %>% 
+                        dplyr::summarise(meanAUC = mean(AUC.cor)) %>% 
+                        dplyr::mutate(Family_EBV = dplyr::case_when(Family >= 48 ~ 'Low',
+                                                                    Family <= 20 ~ 'High'))
+
+ggplot(data = Master_meansFamily,
+       aes(x = Treatment,
+           y = meanAUC,
+           color = Family_EBV,
+           group = Family)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE) +
+                                    theme_classic() 
 
 
-
+ ggplot(data =Master_meansFamily, 
+                                   aes(x=Treatment, 
+                                       y = meanAUC, 
+                                        group =  Family_EBV, 
+                                        color = Family_EBV)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, correct to blank shell)",
+                                      title = "C. magallana juvniles temp ramp"
+                                    )  +
+                                    geom_smooth(method = "loess",               
+                                                se = TRUE,                      
+                                                level = 0.95,
+                                                span = 0.8)  +
+                                    theme_classic() 
 ```
 
 
+```{r stats by family juvenile TempRamp}
+
+AOV30C.Family <- aov(
+                      lm(
+                        AUC.cor ~ Family,
+                         data = (Master %>% dplyr::filter(Treatment %in% "30C"))))
+shapiro.test(resid(AOV30C.Family)) # 0.003699 - N.S,
+kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "30C"))) # 0.007907 - significant
+
+1AOV32C.Family <- aov(
+                      lm(
+                        AUC.cor ~ Family,
+                         data = (Master %>% dplyr::filter(Treatment %in% "32C"))))
+shapiro.test(resid(AOV32C.Family)) # 0.02742 - N.S,
+kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "32C"))) # 0.04516 - significant
+
+AOV34C.Family <- aov(
+                      lm(
+                        AUC.cor ~ Family,
+                         data = (Master %>% dplyr::filter(Treatment %in% "34C"))))
+shapiro.test(resid(AOV34C.Family)) # 0.004611 - N.S,
+kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "34C"))) # 0.003453 - significant
+
+
+AOV38C.Family <- aov(
+                      lm(
+                        AUC.cor ~ Family,
+                         data = (Master %>% dplyr::filter(Treatment %in% "38C"))))
+shapiro.test(resid(AOV38C.Family)) # 0.008765 - N.S,
+kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "38C"))) # 0.1768 - NOT SIGNIFICANT
+
+```
+
+```{r stats by high low EBV groups juvenile TempRamp}
+
+AOV30C.highvlow <- aov(
+                      lm(
+                        meanAUC ~ Family_EBV,
+                         data = (Master_meansFamily %>% dplyr::filter(Treatment %in% "30C"))))
+shapiro.test(resid(AOV30C.highvlow)) # 0.4541
+summary(AOV30C.highvlow) # 0.0727 .
+
+AOV32C.highvlow <- aov(
+                      lm(
+                        meanAUC ~ Family_EBV,
+                         data = (Master_meansFamily %>% dplyr::filter(Treatment %in% "32C"))))
+shapiro.test(resid(AOV32C.highvlow)) # 0.09189
+summary(AOV32C.highvlow) # 0.00217 **.
+
+AOV34C.highvlow <- aov(
+                      lm(
+                        meanAUC ~ Family_EBV,
+                         data = (Master_meansFamily %>% dplyr::filter(Treatment %in% "34C"))))
+shapiro.test(resid(AOV34C.highvlow)) # 0.2049
+summary(AOV34C.highvlow) # 0.144
+
+AOV38C.highvlow <- aov(
+                      lm(
+                        meanAUC ~ Family_EBV,
+                         data = (Master_meansFamily %>% dplyr::filter(Treatment %in% "38C"))))
+shapiro.test(resid(AOV38C.highvlow)) # 0.3482
+summary(AOV38C.highvlow) # 0.845
+```

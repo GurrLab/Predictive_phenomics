@@ -151,22 +151,6 @@ covert_to_df_Gladys <- function (file_in) {
                           return(file_out)
 }
 
-file_out <-as.data.frame(
-  (xlsx_list_seed28C[["NIFA_Resazurin_28_T4_30062026_1325_g77"]])[-c(9:39),]
-)  %>% # drop first columns and first 26 rows
-mutate(across(2:13, ~ suppressWarnings(as.integer(.))))
-colnames(file_out) <- c("Plate_row", 1,2,3,4,5,6,7,8,9,10,11,12)
-x.hrmin <- gsub(".*_(\\d{8})_(\\d{4})_.*",  "\\2", "NIFA_Resazurin_28_T4_30062026_1325_g77")
-file_out <- file_out %>%  
-                              tidyr::pivot_longer(
-                                cols = -Plate_row,
-                                names_to = "Plate_col",
-                                values_to = "flourescence"
-                              )
-
-file_out %>%
-  mutate(across(2:5, ~ suppressWarnings(as.integer(.))))
-
 
 covert_to_df_Tecan_28C <- function (file_in) { # raw files for 28C are formatted differently than all the other, catering here to just these
 
@@ -254,8 +238,27 @@ rbind.df_72hpf$Plate_col <- as.numeric(rbind.df_72hpf$Plate_col)
 
 
 data_merged_72hpf <- dplyr::left_join(rbind.df_72hpf,metadata_counts, by=c('Date','PlateID','Well', 'Plate_row', "Plate_col"))
-View(data_merged_72hpf)
+
 nrow(rbind.df_72hpf) == nrow(data_merged_72hpf) # MUST VE TRUE!!!!
+
+
+data_merged_72hpf <- data_merged_72hpf %>% 
+  dplyr::rename(Treatment = Treatment.x) %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "Plate_num",
+                "PlateID",
+                "Well",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
 
 ```
 
@@ -292,10 +295,30 @@ rbind.df_15dpf <- rbind.df %>%
                                                         plate == 2 ~ "plate_2_30",
                                                         plate == 3 ~ "plate_3_34",
                                                         plate == 4 ~ "plate_4_38"))
-rbind.df_15dpf$time
-data_merged_15dpf <- dplyr::left_join(rbind.df_15dpf,metadata_counts, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
+
+rbind.df_15dpf$Plate_col <- as.numeric(rbind.df_15dpf$Plate_col)
+data_merged_15dpf <- dplyr::left_join(rbind.df_15dpf,metadata_counts, by=c('Date','PlateID', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
+
 
 nrow(rbind.df_15dpf) == nrow(data_merged_15dpf) # MUST VE TRUE!!!!
+
+
+data_merged_15dpf <- data_merged_15dpf %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "Plate_num",
+                "PlateID",
+                "Well",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
 ```
 
 ```{r 15 dpf output}
@@ -335,10 +358,28 @@ rbind.df_48dpf <- rbind.df %>% # note, the names of the files differ from the pr
                                                         grepl("38C", plate, ignore.case = TRUE) ~ "plate_4_38"))
 
 
-
-data_merged_48dpf <- dplyr::left_join(rbind.df_48dpf,metadata_counts, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
+rbind.df_48dpf$Plate_col <- as.numeric(rbind.df_48dpf$Plate_col)
+data_merged_48dpf <- dplyr::left_join(rbind.df_48dpf,metadata_counts, by=c('Date','PlateID', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
 
 nrow(rbind.df_48dpf) == nrow(data_merged_48dpf) # MUST VE TRUE!!!!
+unique(metadata_counts$Date)
+
+
+data_merged_48dpf <- data_merged_48dpf %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
 
 ```
 
@@ -372,6 +413,7 @@ nrow(rbind.df) # 499
 
 rbind.df_seed28C <- rbind.df %>% # note, the names of the files differ from the previous time;oint, so made adjustments here
                     dplyr::mutate(Date = 20260630,
+                                  Treatment = "28C",
                                   gain = dplyr::case_when(
                                                         grepl("g70", plate, ignore.case = TRUE) ~ 70, # plates were manually set to a gain at 65 and 70 for all runs
                                                         grepl("g77", plate, ignore.case = TRUE) ~ 77),
@@ -394,10 +436,35 @@ rbind.df_seed28C <- rbind.df %>% # note, the names of the files differ from the 
                                                              grepl("28_T4", filename, fixed = TRUE) &
                                                                grepl("g77",  filename, fixed = TRUE) ~ "T4_28C_77g"))
 
+rbind.df_seed28C$Plate_col <- as.numeric(rbind.df_seed28C$Plate_col)
+data_merged_seed28C <- dplyr::left_join(rbind.df_seed28C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
+
+nrow(rbind.df_seed28C) == nrow(data_merged_seed28C) # MUST VE TRUE!!!!
+
+
+
+
+data_merged_seed28C <- data_merged_seed28C %>% 
+  dplyr::rename(PlateID = PlateID.x) %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "gain",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
 ```
 
 ```{r seed at 28C output}
-write.csv(rbind.df_seed28C,  "output/resazurin/raw/rawdf_20260630_28C.csv")
+write.csv(data_merged_seed28C,  "output/resazurin/raw/rawdf_20260630_28C.csv")
 ```
 
 
@@ -426,6 +493,7 @@ nrow(rbind.df) # 1008
 
 rbind.df_seed30C <- rbind.df %>% # note, the names of the files differ from the previous time;oint, so made adjustments here
                     dplyr::mutate(Date = 20260702,
+                                  Treatment = "30C",
                                   gain = dplyr::case_when(
                                                         grepl("g65", plate, ignore.case = TRUE) ~ 65, # plates were manually set to a gain at 65 and 70 for all runs
                                                         grepl("g70", plate, ignore.case = TRUE) ~ 70),
@@ -468,14 +536,33 @@ rbind.df_seed30C <- rbind.df %>% # note, the names of the files differ from the 
 
 
 
-# metadata not yet ready!
-# data_merged_seed30C <- dplyr::left_join(rbind.df_seed30C, <INSERT METADATA>, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
+rbind.df_seed30C$Plate_col <- as.numeric(rbind.df_seed30C$Plate_col)
+data_merged_seed30C <- dplyr::left_join(rbind.df_seed30C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
 
+nrow(rbind.df_seed30C) == nrow(data_merged_seed30C) # MUST VE TRUE!!!!
+
+data_merged_seed30C <- data_merged_seed30C %>% 
+  dplyr::rename(PlateID = PlateID.x) %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "gain",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
 
 ```
 
 ```{r seed at 30C output}
-write.csv(rbind.df_seed30C,  "output/resazurin/raw/rawdf_20260702_30C.csv")
+write.csv(data_merged_seed30C,  "output/resazurin/raw/rawdf_20260702_30C.csv")
 ```
 
 
@@ -504,19 +591,39 @@ nrow(rbind.df) # 492
 
 rbind.df_seed32C <- rbind.df %>% # note, the names of the files differ from the previous time;oint, so made adjustments here
                     dplyr::mutate(Date = 20260704,
+                                  Treatment = "32C",
                                   gain = dplyr::case_when(
-                                                        grepl("g60", plate, ignore.case = TRUE) ~ 60, # plates were manually set to a gain at 65 and 70 for all runs
-                                                        grepl("g65", plate, ignore.case = TRUE) ~ 65))
+                                                        grepl("g65", plate, ignore.case = TRUE) ~ 65)) # plates were manually set to a gain at 65 and 70 for all runs
 
 
 # metadata not yet ready!
 # data_merged_seed34C <- dplyr::left_join(rbind.df_seed34C, <INSERT METADATA>, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
 
+rbind.df_seed32C$Plate_col <- as.numeric(rbind.df_seed32C$Plate_col)
+data_merged_seed32C <- dplyr::left_join(rbind.df_seed32C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
 
+nrow(rbind.df_seed32C) == nrow(data_merged_seed32C) # MUST VE TRUE!!!!
+
+data_merged_seed32C <- data_merged_seed32C %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "gain",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
 ```
 
 ```{r seed at 32C output}
-write.csv(rbind.df_seed32C,  "output/resazurin/raw/rawdf_20260704_32C.csv")
+write.csv(data_merged_seed32C,  "output/resazurin/raw/rawdf_20260704_32C.csv")
 ```
 
 
@@ -545,6 +652,7 @@ nrow(rbind.df) # 1008
 
 rbind.df_seed34C <- rbind.df %>% # note, the names of the files differ from the previous time;oint, so made adjustments here
                     dplyr::mutate(Date = 20260706,
+                                  Treatment = "34C",
                                   gain = dplyr::case_when(
                                                         grepl("g60", plate, ignore.case = TRUE) ~ 60, # plates were manually set to a gain at 65 and 70 for all runs
                                                         grepl("g65", plate, ignore.case = TRUE) ~ 65),
@@ -586,14 +694,33 @@ rbind.df_seed34C <- rbind.df %>% # note, the names of the files differ from the 
                                                                grepl("g65",  filename, fixed = TRUE) ~ "T5_34C_65g"))
 
 
-# metadata not yet ready!
-# data_merged_seed34C <- dplyr::left_join(rbind.df_seed34C, <INSERT METADATA>, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
 
+rbind.df_seed34C$Plate_col <- as.numeric(rbind.df_seed34C$Plate_col)
+data_merged_seed34C <- dplyr::left_join(rbind.df_seed34C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
 
+nrow(rbind.df_seed34C) == nrow(data_merged_seed34C) # MUST VE TRUE!!!!
+
+data_merged_seed34C <- data_merged_seed34C %>% 
+  dplyr::rename(PlateID = PlateID.x) %>%  
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "gain",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
 ```
 
 ```{r seed at 34C output}
-write.csv(rbind.df_seed34C,  "output/resazurin/raw/rawdf_20260706_34C.csv")
+write.csv(data_merged_seed34C,  "output/resazurin/raw/rawdf_20260706_34C.csv")
 ```
 
 
@@ -622,17 +749,43 @@ nrow(rbind.df) # 468
 
 rbind.df_seed38C <- rbind.df %>% # note, the names of the files differ from the previous time;oint, so made adjustments here
                     dplyr::mutate(Date = 20260710,
+                                  Treatment = "38C",
                                   gain = dplyr::case_when(
                                                         grepl("g60", plate, ignore.case = TRUE) ~ 60, # plates were manually set to a gain at 65 and 70 for all runs
                                                         grepl("g65", plate, ignore.case = TRUE) ~ 65))
 
 
-# metadata not yet ready!
-# data_merged_seed34C <- dplyr::left_join(rbind.df_seed34C, <INSERT METADATA>, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
+rbind.df_seed38C$Plate_col <- as.numeric(rbind.df_seed38C$Plate_col)
+data_merged_seed38C <- dplyr::left_join(rbind.df_seed38C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
 
+nrow(rbind.df_seed38C) == nrow(data_merged_seed38C) # MUST VE TRUE!!!!
 
+data_merged_seed38C <- data_merged_seed38C %>% 
+  dplyr::mutate(time = as.POSIXlt((strptime(
+                                            (gsub(".*_(\\d{8})_(\\d{4})_.*",  "\\1 \\2",  
+                                                  data_merged_seed38C$filename)), 
+                                            format = "%Y%m%d %H%M")), 
+                                  format = "%H:%M")
+                ) %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "gain",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
+             
+                                          
 ```
 
 ```{r seed at 38C output}
-write.csv(rbind.df_seed38C,  "output/resazurin/raw/rawdf_20260710_38C.csv")
+write.csv(data_merged_seed38C,  "output/resazurin/raw/rawdf_20260710_38C.csv")
 ```
