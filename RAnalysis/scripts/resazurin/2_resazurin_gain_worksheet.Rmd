@@ -1,0 +1,428 @@
+---
+title: "2_resazurin_gain_worksheet"
+author: "Samuel Gurr"
+date: "2026-09-01"
+output: html_document
+---
+
+
+### Objective 
+
+* load in a few time points during the USDA NIFA temperature ramp experiment when plates 
+were run on the Tecan. 
+
+* Understand if gain has an effect on AUC
+
+* plot the raw data against different gains within the same well 
+
+  - Fortunately, Anna caught the gain issue and ran plates at mutltiple gains to test them 
+  
+* determine a concrete normalization integer for gain
+
+Answer (as of 20260901)
+  * Going from lower gain to higher
+          AUC * 1.145 for every 1 unit increase in gain 
+  * Going from higher gain to lower
+          AUC * 0.095 for every 1 unit decrease in gain
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# SET WORKING DIRECTORY 
+knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's
+# knitr::opts_knit$set(root.dir = "C:/ < Anna add here > /Predictive_phenomics/RAnalysis") # Anna's root dir on her computer
+```
+
+
+```{r load libraries}
+library(readxl)
+library(stringr)
+library(pracma)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r load metadata}
+
+# metadata
+metadata_counts <- read.csv("data/Pacific_oyster/resazurin/metadata.csv", sep=',')
+plate_notes     <- metadata_counts %>%  dplyr::select(c('PlateID','Well','Note','X')) %>% dplyr::rename(obs_volume = X)
+families        <- read.csv("data/Pacific_oyster/YC26-ebv-crosses-broodpops.csv", sep=',') %>% dplyr::rename(Family = cross)
+
+```
+
+
+```{r  AUC_calculate function}
+
+AUC_calculate <- function (file_in) {
+
+                output.df <- data.frame()
+                loop.df_m   <- data.frame(unique(file_in$PlateID)) # call specific df
+                loop.df_i   <- data.frame(unique(file_in$Well))  # call specific df
+                # Call the cumulative dataframe that we will write to in the for loop below
+                output.cumulative.df <- data.frame() # start dataframe 
+                output.df            <- data.frame() # start dataframe 
+                output.cor.df        <- data.frame() # start dataframe 
+                running.df           <- data.frame(matrix(nrow = 1, ncol = 10)) # create dataframe to save cumunalitively during for loop
+                colnames(running.df) <- c('Date', 'Treatment', 'PlateID', 'Age', 'Well', 'Family', 'Type', 'Count', 'AUC', 'gain') # names for columns in the for loop
+                          
+                          for(m in 1:nrow(loop.df_m)){
+                            plate_id      <- file_in %>%   # call specific df
+                                                          dplyr::filter(PlateID %in% loop.df_m[m,1])
+                                  for(i in 1:nrow(loop.df_i)){
+                                    well.over.time       <- plate_id %>% 
+                                                                  dplyr::filter(Well %in% loop.df_i[i,1]) %>% 
+                                                                  dplyr::arrange(time) %>% 
+                                                                  dplyr::mutate(hours = as.numeric(difftime(time, 
+                                                                                                            time[1], 
+                                                                                                            units = "hours")),
+                                                                                delta_florescence = flourescence - flourescence[1],
+                                                                                AUC = pracma::trapz(
+                                                                                                    hours, 
+                                                                                                    flourescence)) %>% 
+                                                                  dplyr::select('Date', 'Treatment', 'PlateID', 'Age', 'time', 'Family', 'hours',
+                                                                                'Well', 'Type', 'Count', 'AUC', 'delta_florescence')
+                                                        
+                                    output.cumulative.df <- rbind(output.cumulative.df, well.over.time)
+                                    
+                                    running.df$Date      <- well.over.time$Date[1]
+                                    running.df$Treatment <- well.over.time$Treatment[1]
+                                    running.df$PlateID   <- well.over.time$PlateID[1]
+                                    running.df$Age       <- well.over.time$Age[1]
+                                    running.df$Well      <- well.over.time$Well[1]
+                                    running.df$Family    <- well.over.time$Family[1]
+                                    running.df$Type      <- well.over.time$Type[1]
+                                    running.df$Count     <- well.over.time$Count[1]
+                                    running.df$AUC       <- well.over.time$AUC[1]
+                                    
+                                    output.df <- rbind(output.df,
+                                                       running.df) #bind to a cumulative list dataframe
+                                    print(output.df) # print to monitor progress
+                 
+                                    } # wells within plate i end
+      
+                           } # wells within plate m end
+            
+            return(output.df)
+            
+} # function end
+
+
+AUC_calculate <- function (file_in) {
+
+                output.df   <- data.frame()
+                loop.df_m   <- data.frame(unique(file_in$gain))  # call specific df
+                loop.df_i   <- data.frame(unique(file_in$Well))  # call specific df
+                
+                # Call the cumulative dataframe that we will write to in the for loop below
+                output.cumulative.df <- data.frame() # start dataframe 
+                output.cor.df        <- data.frame() # start dataframe 
+                output.cor.df_final  <- data.frame() # start dataframe 
+                running.df           <- data.frame(matrix(nrow = 1, ncol = 10)) # create dataframe to save cumunalitively during for loop
+                colnames(running.df) <- c('Date', 'Treatment', 'PlateID', 'Age', 'Well', 'Family', 'Type', 'Count', 'AUC', 'gain') # names for columns in the for loop
+                
+                for(m in 1:nrow(loop.df_m)){
+                  plate_id      <- file_in %>%   # call specific df !!! change to data_merged_seed34C <METADATA NEEDED FOR THIS!>
+                                                dplyr::filter(gain %in% loop.df_m[m,1])
+                  
+                          for(i in 1:nrow(loop.df_i)){
+                            plate_id$flourescence <- as.numeric(plate_id$flourescence)
+                            # plate_id$Treatment    <- 34 # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            # plate_id$Age          <- "seed" # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            # plate_id$Family       <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            # plate_id$Type         <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            # plate_id$Count        <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            plate_id$gain         <- loop.df_m[m,1] # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            well.over.time        <- plate_id %>%
+                              
+                                                          dplyr::filter(Well %in% loop.df_i[i,1]) %>% 
+                                                          dplyr::arrange(time) %>% 
+                                                          dplyr::mutate(hours = as.numeric(difftime(time, 
+                                                                                                    time[1], 
+                                                                                                    units = "hours")),
+                                                                        delta_florescence = flourescence - flourescence[1],
+                                                                        AUC = pracma::trapz(
+                                                                                            hours, 
+                                                                                            delta_florescence)) %>% 
+                                                          dplyr::select('Date', 'Treatment', 'PlateID', 'gain', 'Age', 'time', 'Family', 'hours',
+                                                                        'Well', 'Type', 'Count', 'AUC', 'delta_florescence')
+                                                
+                            output.cumulative.df <- rbind(output.cumulative.df, 
+                                                          well.over.time)
+                            
+                            running.df$Date      <- well.over.time$Date[1]
+                            running.df$Treatment <- well.over.time$Treatment[1]
+                            running.df$PlateID   <- well.over.time$PlateID[1]
+                            running.df$Age       <- well.over.time$Age[1]
+                            running.df$Well      <- well.over.time$Well[1]
+                            running.df$Family    <- well.over.time$Family[1]
+                            running.df$Type      <- well.over.time$Type[1]
+                            running.df$Count     <- well.over.time$Count[1]
+                            running.df$AUC       <- well.over.time$AUC[1]
+                            running.df$gain      <- well.over.time$gain[1]
+                            
+                             output.df <- rbind(output.df,
+                                               running.df) #bind to a cumulative list dataframe
+
+                             
+                             # mean blank AUC by each plate
+                            # mean.AUC.blanks <- mean(
+                            #                          (output.cumulative.df %>% dplyr::filter(Type %in% 'Blank'))$AUC
+                            #                         )
+             
+                          } # for(i in 1:nrow(loop.df_i)){
+
+                  
+                  return(list(dataframe = output.df, output.meanBlank = mean.AUC.blanks))
+
+                } # for(m in 1:nrow(loop.df_m)){
+}
+```
+
+
+```{r load test data at 30 and 34C}
+
+rawdf_02072026_30C <- read.csv("output/resazurin/raw/rawdf_02072026_30C.csv") %>% 
+                                  dplyr::mutate(time = as.POSIXct(time)) %>% 
+                                  dplyr::mutate(Treatment = "30C",
+                                                Age = 105,
+                                                Family = NA,
+                                                Type = NA,
+                                                Count = NA) # from 20260317 to 20260630
+                                  
+rawdf_02072026_34C <- read.csv("output/resazurin/raw/rawdf_06072026_34C.csv") %>% 
+                                  dplyr::mutate(time = as.POSIXct(time)) %>% 
+                                  dplyr::mutate(Treatment = "34C",
+                                                flourescence = as.numeric(flourescence),
+                                                Age = 109,
+                                                Family = NA,
+                                                Type = NA,
+                                                Count = NA) # from 20260317 to 20260630
+                                  
+```
+
+
+```{r calc AUC}
+
+AUC_105dpf_30C <- AUC_calculate(rawdf_02072026_30C)
+AUC_105dpf_30C$dataframe
+AUC_109dpf_34C <- AUC_calculate(rawdf_02072026_34C)
+
+```
+
+
+## Calculating area under the curve
+
+  * as of 9/2/2026 using pracma::trapz - pracma lackage and the call is trapz, use ?trapz to learn more
+
+Note: call specific df
+  * loop.df_m and loop.df_i = columns in **rbind.df_seed34C**
+  * plate_id == rows in **data_merged_seed34C** by common plate ID between **rbind.df_seed34C** 
+```{r seed 30C auc calc function}
+
+output.df   <- data.frame()
+loop.df_m   <- data.frame(unique(rawdf_02072026_30C$gain))  # call specific df
+loop.df_i   <- data.frame(unique(rawdf_02072026_30C$Well))  # call specific df
+
+# Call the cumulative dataframe that we will write to in the for loop below
+output.cumulative.df <- data.frame() # start dataframe 
+output.cor.df        <- data.frame() # start dataframe 
+output.cor.df_final  <- data.frame() # start dataframe 
+running.df           <- data.frame(matrix(nrow = 1, ncol = 10)) # create dataframe to save cumunalitively during for loop
+colnames(running.df) <- c('Date', 'Treatment', 'PlateID', 'Age', 'Well', 'Family', 'Type', 'Count', 'AUC', 'gain') # names for columns in the for loop
+
+for(m in 1:nrow(loop.df_m)){
+  plate_id      <- rawdf_02072026_30C %>%   # call specific df !!! change to data_merged_seed34C <METADATA NEEDED FOR THIS!>
+                                dplyr::filter(gain %in% loop.df_m[m,1])
+for(i in 1:nrow(loop.df_i)){
+  plate_id$flourescence <- as.numeric(plate_id$flourescence)
+  plate_id$Treatment    <- 34 # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$Age          <- "seed" # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$Family       <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$Type         <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$Count        <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$gain         <- loop.df_m[m,1] # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  well.over.time        <- plate_id %>% 
+                                dplyr::filter(Well %in% loop.df_i[i,1]) %>% 
+                                dplyr::arrange(time) %>% 
+                                dplyr::mutate(hours = as.numeric(difftime(time, 
+                                                                          time[1], 
+                                                                          units = "hours")),
+                                              delta_florescence = flourescence - flourescence[1],
+                                              AUC = pracma::trapz(
+                                                                  hours, 
+                                                                  delta_florescence)) %>% 
+                                dplyr::select('Date', 'Treatment', 'PlateID', 'gain', 'Age', 'time', 'Family', 'hours',
+                                              'Well', 'Type', 'Count', 'AUC', 'delta_florescence')
+                      
+  output.cumulative.df <- rbind(output.cumulative.df, 
+                                well.over.time)
+  
+  running.df$Date      <- well.over.time$Date[1]
+  running.df$Treatment <- well.over.time$Treatment[1]
+  running.df$PlateID   <- well.over.time$PlateID[1]
+  running.df$Age       <- well.over.time$Age[1]
+  running.df$Well      <- well.over.time$Well[1]
+  running.df$Family    <- well.over.time$Family[1]
+  running.df$Type      <- well.over.time$Type[1]
+  running.df$Count     <- well.over.time$Count[1]
+  running.df$AUC       <- well.over.time$AUC[1]
+  running.df$gain      <- well.over.time$gain[1]
+  
+   output.df <- rbind(output.df,
+                     running.df) #bind to a cumulative list dataframe
+   print(output.df) # print to monitor progress
+   
+   # mean blank AUC by each plate
+  mean.AUC.blanks <- mean(
+                           (output.df %>% dplyr::filter(Type %in% 'Blank'))$AUC
+                          )
+   
+} # wells within plate end
+
+}
+
+
+
+ggplot(output.df, aes(x=Well, y=AUC))+ 
+  geom_point() +
+  facet_wrap(~gain)
+
+
+output.df_WIDE <- reshape(output.df %>% dplyr::select(-c("Family", "PlateID", "Age", "Type", "Count")),
+                          idvar = c("Date","Treatment","Well"), timevar = "gain", direction = "wide")
+
+output.df_WIDE$fudge <- (output.df_WIDE$AUC.70 - output.df_WIDE$AUC.65)
+
+ggplot(output.df_WIDE, aes(x=AUC.65, y= AUC.70))+ 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + # Adds trend line
+  stat_regline_equation(label.x = 50000, label.y = 50000) +       # Adds slope equation
+  stat_cor(aes(label = ..rr.label..), label.x = 50000, label.y = 40000) # Adds R2 value
+
+```
+Conclusion
+  *   we have a R squared of 1 giving us extremely reliable data to base an equation. Instead of 1:1 we are getting a slope increase of 1.7 * AUC_65g to equal AUC_70g. This suggests that every 1 increase in unit gain is 1.14* AUC (0.7/5 == 0.14)
+
+
+Note: call specific df
+  * loop.df_m and loop.df_i = columns in **rbind.df_seed34C**
+  * plate_id == rows in **data_merged_seed34C** by common plate ID between **rbind.df_seed34C** 
+```{r seed 34C auc calc function}
+
+output.df   <- data.frame()
+loop.df_m   <- data.frame(unique(rawdf_02072026_34C$gain))  # call specific df
+loop.df_i   <- data.frame(unique(rawdf_02072026_34C$Well))  # call specific df
+
+# Call the cumulative dataframe that we will write to in the for loop below
+output.cumulative.df <- data.frame() # start dataframe 
+output.cor.df        <- data.frame() # start dataframe 
+output.cor.df_final  <- data.frame() # start dataframe 
+running.df           <- data.frame(matrix(nrow = 1, ncol = 10)) # create dataframe to save cumunalitively during for loop
+colnames(running.df) <- c('Date', 'Treatment', 'PlateID', 'Age', 'Well', 'Family', 'Type', 'Count', 'AUC', 'gain') # names for columns in the for loop
+
+for(m in 1:nrow(loop.df_m)){
+  plate_id      <- rawdf_02072026_34C %>%   # call specific df !!! change to data_merged_seed34C <METADATA NEEDED FOR THIS!>
+                                dplyr::filter(gain %in% loop.df_m[m,1])
+for(i in 1:nrow(loop.df_i)){
+  plate_id$flourescence <- as.numeric(plate_id$flourescence)
+  plate_id$Treatment    <- 34 # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$Age          <- "seed" # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$Family       <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$Type         <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$Count        <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  plate_id$gain         <- loop.df_m[m,1] # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+  well.over.time        <- plate_id %>% 
+                                dplyr::filter(Well %in% loop.df_i[i,1]) %>% 
+                                dplyr::arrange(time) %>% 
+                                dplyr::mutate(hours = as.numeric(difftime(time, 
+                                                                          time[1], 
+                                                                          units = "hours")),
+                                              delta_florescence = flourescence - flourescence[1],
+                                              AUC = pracma::trapz(
+                                                                  hours, 
+                                                                  flourescence)) %>% 
+                                dplyr::select('Date', 'Treatment', 'PlateID', 'gain', 'Age', 'time', 'Family', 'hours',
+                                              'Well', 'Type', 'Count', 'AUC', 'delta_florescence')
+                      
+  output.cumulative.df <- rbind(output.cumulative.df, 
+                                well.over.time)
+  
+  running.df$Date      <- well.over.time$Date[1]
+  running.df$Treatment <- well.over.time$Treatment[1]
+  running.df$PlateID   <- well.over.time$PlateID[1]
+  running.df$Age       <- well.over.time$Age[1]
+  running.df$Well      <- well.over.time$Well[1]
+  running.df$Family    <- well.over.time$Family[1]
+  running.df$Type      <- well.over.time$Type[1]
+  running.df$Count     <- well.over.time$Count[1]
+  running.df$AUC       <- well.over.time$AUC[1]
+  running.df$gain      <- well.over.time$gain[1]
+  
+   output.df <- rbind(output.df,
+                     running.df) #bind to a cumulative list dataframe
+   print(output.df) # print to monitor progress
+   
+   # mean blank AUC by each plate
+  mean.AUC.blanks <- mean(
+                           (output.df %>% dplyr::filter(Type %in% 'Blank'))$AUC
+                          )
+   
+} # wells within plate end
+
+}
+
+
+
+ggplot(output.df, aes(x=Well, y=AUC))+ 
+  geom_point() +
+  facet_wrap(~gain)
+
+
+output.df_WIDE <- reshape(output.df %>% dplyr::select(-c("Family", "PlateID", "Age", "Type", "Count")),
+                          idvar = c("Date","Treatment","Well"), timevar = "gain", direction = "wide")
+
+output.df_WIDE$fudge <- (output.df_WIDE$AUC.65 - output.df_WIDE$AUC.60)
+
+
+ggarrange(
+ggplot(output.df_WIDE, aes(x=AUC.60, y=AUC.65))+ 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + # Adds trend line
+  stat_regline_equation(label.x = 50000, label.y = 50000) +       # Adds slope equation
+  stat_cor(aes(label = ..rr.label..), label.x = 50000, label.y = 40000), # Adds R2 value
+
+
+ggplot(output.df_WIDE, aes(x=AUC.65, y=AUC.60))+ 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") + # Adds trend line
+  stat_regline_equation(label.x = 50000, label.y = 50000) +       # Adds slope equation
+  stat_cor(aes(label = ..rr.label..), label.x = 50000, label.y = 40000) # Adds R2 value
+)
+```
+Conclusion
+  - similar to the 30C run, R^2 = 1 very strong correlation. 1.8 is the slope for 0.6 to 0.65  0.8/5 == 0.16, so the average from these data suggests that each increase in 1 unit gain is adjusted as  1.15*AUC
+  
+  
+  
+MAIN CONCLUSION
+  * If necessary toadjust gain betwen values... (say comparing those at 28C with a gain of 60 to those at 30C measured with gain of 65) do the following
+  
+  * Calculating an increase in gain between values? 
+    
+      - AUC * 1.145 for every 1 unit gain 
+      
+      - Example: 
+        Measurement at 60 gain and want to adjust to 65 gain 
+        65-60 = 5
+        5*0.145 = 0.725
+        1+ 0.725 = 1.725
+        AUC_65_gain  === AUC_60_gain * 1.725
+        
+      - Example
+        Measurement at 65 gain and want to adjust to 60 gain 
+        65-60 = 5
+        5*0.095 = 0.475
+        1 - 0.41 = 0.525
+        AUC_60_gain  === AUC_65_gain * 0.525
+        
+

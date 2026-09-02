@@ -1,0 +1,727 @@
+---
+title: "2_resazurin_calc_analysis"
+author: "Samuel Gurr"
+date: "2026-03-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# SET WORKING DIRECTORY 
+knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's
+# knitr::opts_knit$set(root.dir = "C:/ < Anna add here > /Predictive_phenomics/RAnalysis") # Anna's root dir on her computer
+```
+
+
+```{r}
+library(readxl)
+library(stringr)
+library(pracma)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r}
+
+# metadata
+metadata_counts <- read.csv("data/Pacific_oyster/resazurin/metadata.csv", sep=',')
+plate_notes     <- metadata_counts %>%  dplyr::select(c('PlateID','Well','Note','X')) %>% dplyr::rename(obs_volume = X)
+families        <- read.csv("data/Pacific_oyster/YC26-ebv-crosses-broodpops.csv", sep=',') %>% dplyr::rename(Family = cross)
+
+# outputs from 1_resazurin_raw_compiler
+# life stages during larval development
+rawdf_72hpf         <- read.csv("output/resazurin/raw/rawdf_72hpf.csv") %>% dplyr::select(-Treatment.y) %>% dplyr::rename(Treatment = Treatment.x)
+rawdf_15dpf         <- read.csv("output/resazurin/raw/rawdf_15dpf.csv")
+rawdf_48dpf         <- read.csv("output/resazurin/raw/rawdf_48dpf.csv")
+# temperature ramp experiment
+rawdf_20260630_28C  <- read.csv("output/resazurin/raw/rawdf_20260630_28C.csv")
+
+rawdf_20260702_30C  <- read.csv("output/resazurin/raw/rawdf_20260702_30C.csv")
+
+rawdf_20260704_32C  <- read.csv("output/resazurin/raw/rawdf_20260704_32C.csv")
+
+rawdf_20260706_34C  <- read.csv("output/resazurin/raw/rawdf_20260706_34C.csv")
+
+rawdf_20260710_38C  <- read.csv("output/resazurin/raw/rawdf_20260710_38C.csv")
+
+```
+
+
+
+### no gain included in this function
+
+* what to do for other timepoints with gain differences? run these manually - look below for how
+
+```{r  AUC_calculate function}
+
+AUC_calculate <- function (file_in) {
+
+                output.df <- data.frame()
+                loop.df_m   <- data.frame(unique(file_in$PlateID)) # call specific df
+                loop.df_i   <- data.frame(unique(file_in$Well))  # call specific df
+                # Call the cumulative dataframe that we will write to in the for loop below
+                output.cumulative.df <- data.frame() # start dataframe 
+                output.df            <- data.frame() # start dataframe 
+                output.cor.df        <- data.frame() # start dataframe 
+                running.df           <- data.frame(matrix(nrow = 1, ncol = 9)) # create dataframe to save cumunalitively during for loop
+                colnames(running.df) <- c('Date', 'Treatment', 'PlateID', 'Age', 'Well', 'Family', 'Type', 'Count', 'AUC') # names for columns in the for loop
+                          
+                          for(m in 1:nrow(loop.df_m)){
+                            plate_id      <- file_in %>%   # call specific df
+                                                          dplyr::filter(PlateID %in% loop.df_m[m,1])
+                                  for(i in 1:nrow(loop.df_i)){
+                                    well.over.time       <- plate_id %>% 
+                                                                  dplyr::filter(Well %in% loop.df_i[i,1]) %>% 
+                                                                  dplyr::arrange(time) %>% 
+                                                                  dplyr::mutate(hours = as.numeric(difftime(time, 
+                                                                                                            time[1], 
+                                                                                                            units = "hours")),
+                                                                                delta_florescence = flourescence - flourescence[1],
+                                                                                AUC = pracma::trapz(
+                                                                                                    hours, 
+                                                                                                    delta_florescence)) %>% 
+                                                                  dplyr::select('Date', 'Treatment', 'PlateID', 'Age', 'time', 'Family', 'hours',
+                                                                                'Well', 'Type', 'Count', 'AUC', 'delta_florescence')
+                                                        
+                                    output.cumulative.df <- rbind(output.cumulative.df, well.over.time)
+                                    
+                                    running.df$Date      <- well.over.time$Date[1]
+                                    running.df$Treatment <- well.over.time$Treatment[1]
+                                    running.df$PlateID   <- well.over.time$PlateID[1]
+                                    running.df$Age       <- well.over.time$Age[1]
+                                    running.df$Well      <- well.over.time$Well[1]
+                                    running.df$Family    <- well.over.time$Family[1]
+                                    running.df$Type      <- well.over.time$Type[1]
+                                    running.df$Count     <- well.over.time$Count[1]
+                                    running.df$AUC       <- well.over.time$AUC[1]
+                                    
+                                    output.df <- rbind(output.df,
+                                                       running.df) #bind to a cumulative list dataframe
+                                    # print(output.df) # print to monitor progress
+                 
+                                    } # wells within plate i end
+      
+                           } # wells within plate m end
+            
+            return(output.df)
+            
+} # function end
+```
+
+```{r AUC_calculate_TempRamp}
+
+AUC_calculate_TempRamp <- function (file_in) {
+
+                output.df   <- data.frame()
+                loop.df_m   <- data.frame(unique(file_in$gain))  # call specific df
+                loop.df_i   <- data.frame(unique(file_in$Well))  # call specific df
+                
+                # Call the cumulative dataframe that we will write to in the for loop below
+                output.cumulative.df <- data.frame() # start dataframe 
+                output.cor.df        <- data.frame() # start dataframe 
+                output.cor.df_final  <- data.frame() # start dataframe 
+                running.df           <- data.frame(matrix(nrow = 1, ncol = 5)) # create dataframe to save cumunalitively during for loop
+                colnames(running.df) <- c('Date', 'PlateID',  'Well',  'AUC', 'gain') # names for columns in the for loop
+                
+                for(m in 1:nrow(loop.df_m)){
+                  plate_id      <- file_in %>%   # call specific df !!! change to data_merged_seed34C <METADATA NEEDED FOR THIS!>
+                                                dplyr::filter(gain %in% loop.df_m[m,1])
+                  
+                          for(i in 1:nrow(loop.df_i)){
+                            plate_id$flourescence <- as.numeric(plate_id$flourescence)
+                            # plate_id$Treatment    <- 34 # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            # plate_id$Age          <- "seed" # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            # plate_id$Family       <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            # plate_id$Type         <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            # plate_id$Count        <- NA # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            plate_id$gain         <- loop.df_m[m,1] # manually insert the temperature WAITING FOR METADATA TO CALL plate_id IN 'm'
+                            well.over.time        <- plate_id %>%
+                              
+                                                          dplyr::filter(Well %in% loop.df_i[i,1]) %>% 
+                                                          dplyr::arrange(time) %>% 
+                                                          dplyr::mutate(hours = as.numeric(difftime(time, 
+                                                                                                    time[1], 
+                                                                                                    units = "hours")),
+                                                                        delta_florescence = flourescence - flourescence[1],
+                                                                        AUC = pracma::trapz(
+                                                                                            hours, 
+                                                                                            delta_florescence)) %>% 
+                                                          dplyr::select('Date', 'PlateID', 'gain', 'time', 'hours',
+                                                                        'Well',  'AUC', 'delta_florescence')
+                                                
+                            output.cumulative.df <- rbind(output.cumulative.df, 
+                                                          well.over.time)
+                            
+                            running.df$Date      <- well.over.time$Date[1]
+                            # running.df$Treatment <- well.over.time$Treatment[1]
+                            running.df$PlateID   <- well.over.time$PlateID[1]
+                            # running.df$Age       <- well.over.time$Age[1]
+                            running.df$Well      <- well.over.time$Well[1]
+                            running.df$Family    <- well.over.time$Family[1]
+                            running.df$Type      <- well.over.time$Type[1]
+                            running.df$Count     <- well.over.time$Count[1]
+                            running.df$AUC       <- well.over.time$AUC[1]
+                            running.df$gain      <- well.over.time$gain[1]
+                            
+                             output.df <- rbind(output.df,
+                                               running.df) #bind to a cumulative list dataframe
+
+                             
+                             # mean blank AUC by each plate
+                            # mean.AUC.blanks <- mean(
+                            #                          (output.cumulative.df %>% dplyr::filter(Type %in% 'Blank'))$AUC
+                            #                         )
+                          } # for(i in 1:nrow(loop.df_i)){
+
+                } # for(m in 1:nrow(loop.df_m)){
+                
+            return(list(dataframe = output.df, output.meanBlank = mean.AUC.blanks))
+}
+
+
+```
+
+
+```{r run AUC_calculate function}
+
+# run function AUC_calculate
+AUC_calculate_72hpf  <- AUC_calculate(rawdf_72hpf)
+AUC_calculate_15dpf  <- AUC_calculate(rawdf_15dpf)
+AUC_calculate_48dpf  <- AUC_calculate(rawdf_48dpf)
+
+# run function AUC
+AUC_calculate_20260630_28C  <- AUC_calculate_TempRamp(rawdf_20260630_28C)
+AUC_calculate_20260702_30C  <- AUC_calculate_TempRamp(rawdf_20260702_30C)
+AUC_calculate_20260704_32C  <- AUC_calculate_TempRamp(rawdf_20260704_32C) # needs PlateID
+AUC_calculate_20260706_34C  <- AUC_calculate_TempRamp(rawdf_20260706_34C)
+AUC_calculate_20260710_38C  <- AUC_calculate_TempRamp(rawdf_20260710_38C) # needs PlateID
+```
+
+
+## Clean up data 
+
+
+#### 72 hpf data 
+  * temperatures 26 and 32 (only 2!)
+  * normalized by count (# of individuals counted per well, fixed in formalin)
+  * true blanks are instances where 'Sample' Count == 0, ignore 'Blank' for "Type" column (only here!)
+```{r 72 hpf clean}
+
+# dataset == AUC_calculate_72hpf
+
+
+# SAMPLES  :::::::::::::::::::::::::::::::::::::::
+# data
+AUC_calculate_72hpf.Samples <- AUC_calculate_72hpf %>% dplyr::filter(Type %in% 'Sample' & Count != 0)
+#  raw plot to view well relationship with count
+ggplot(data =AUC_calculate_72hpf.Samples, aes(x=Count, y = AUC)) +
+       geom_point() + 
+       labs(title = "AUC (not blank corrected) by Count") +
+       facet_wrap(~Treatment)
+# verdict: Yes, there is a slight, expected, relatoinship with increase AUC with more indivs/well
+# raw plot to view well bias (potential) 
+ggplot(data =AUC_calculate_72hpf.Samples, aes(x=Well, y = AUC)) +
+       geom_point() + 
+       labs(title = "View the AUC for samples by well") +
+       facet_wrap(~Treatment)
+# verdict: NO DISCERNABLE WELL BIAS
+
+
+# BLANKS  :::::::::::::::::::::::::::::::::::::::
+# data
+AUC_calculate_72hpf.Blanks  <- AUC_calculate_72hpf %>% dplyr::filter(Type %in% 'Sample' & Count == 0) 
+# raw plot to view well bias (potential) 
+
+ggplot(data =AUC_calculate_72hpf.Blanks, aes(x=Well, y = AUC)) +
+       geom_point() + 
+       labs(title = "View the AUC for blanks by well") 
+# verdict:  NO DISCERNABLE WELL BIAS
+
+
+# MEAN BLANKS BY PLATE + TREATMENT  :::::::::::::::::::::::::::::::::::::::
+# data
+MeanBlanks_72hpf <- AUC_calculate_72hpf.Blanks %>% 
+                        dplyr::group_by(PlateID) %>% 
+                        dplyr::summarise(
+                          meanAUC = mean(AUC)
+                        )
+
+
+# MERGE BLANKS WITH SAMPLES, CALCULATE AUC_COR AND AUC_ADJ  ::::::::::::::
+AUC_calculate_72hpf <- merge(AUC_calculate_72hpf.Samples, MeanBlanks_72hpf, by = "PlateID") %>%  # merge by plateID
+                                            dplyr::mutate(
+                                              AUC.cor = AUC - meanAUC,
+                                              AUC.cor.norm = AUC.cor / Count
+                                            ) %>% 
+                                            dplyr::filter(AUC.cor >= 0) %>% # omits negative, AUC samples less than blank
+                                            dplyr::select(
+                                              "Date",
+                                              "Age",
+                                              "Treatment",
+                                              "PlateID",
+                                              "Well",
+                                              "Family",
+                                              "Count",
+                                              "AUC",
+                                              "AUC.cor",
+                                              "AUC.cor.norm"
+                                            )
+  
+
+# PLOTTING ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# AUC corrected adn normalized, all data by family and treatment
+ggplot(AUC_calculate_72hpf, aes(x = as.factor(Family), y = AUC.cor.norm)) + 
+  geom_point() + facet_wrap(~Treatment)
+
+
+# means SE data, for pub 
+AUC_calculate_72hpf.PLOT <- ggplot(data =AUC_calculate_72hpf, 
+                                   aes(x=as.factor(Family), 
+                                       y = AUC.cor.norm)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 72 hpf"
+                                    ) +
+                                    theme_classic() +
+                                    facet_wrap(~Treatment)
+
+```
+
+
+#### 15 dpf data 
+  * temperatures 26, 30, 34, and 38C
+  * normalized by count (# of individuals counted per well, fixed in formalin)
+  * true blanks are denoted as 'Blank' in the "Type" column
+```{r 15 dpf clean}
+
+# dataset == AUC_calculate_15dpf
+unique(AUC_calculate_15dpf$Treatment)
+
+
+# SAMPLES  :::::::::::::::::::::::::::::::::::::::
+# data
+AUC_calculate_15dpf.Samples <- AUC_calculate_15dpf %>% dplyr::filter(Type %in% 'Sample' & Count != 0)
+#  raw plot to view well relationship with count
+ggplot(data =AUC_calculate_15dpf.Samples, aes(x=Count, y = AUC)) +
+       geom_point() + 
+       labs(title = "AUC (not blank corrected) by Count") +
+       facet_wrap(~Treatment)
+# verdict: Yes, there is a slight, expected, relationship with increase AUC with more indivs/well
+# raw plot to view well bias (potential) 
+ggplot(data =AUC_calculate_15dpf.Samples, aes(x=Well, y = AUC)) +
+       geom_point() + 
+       labs(title = "View the AUC for samples by well") +
+       facet_wrap(~Treatment)
+# verdict: NO DISCERNABLE WELL BIAS
+
+
+# BLANKS  :::::::::::::::::::::::::::::::::::::::
+# data
+AUC_calculate_15dpf.Blanks  <- AUC_calculate_15dpf %>% dplyr::filter(Type %in% 'Blank') 
+# raw plot to view well bias (potential) 
+
+ggplot(data =AUC_calculate_15dpf.Blanks, aes(x=Well, y = AUC)) +
+       geom_point() + 
+       labs(title = "View the AUC for blanks by well") +
+       facet_wrap(~Treatment)
+  
+# verdict:  NO DISCERNABLE WELL BIAS, BUT OMIT THOSE >1000 OUTLIERS
+boxplot.stats(AUC_calculate_15dpf.Blanks$AUC)$out
+
+AUC_calculate_15dpf.Blanks.OM <- AUC_calculate_15dpf.Blanks %>% dplyr::filter(!AUC > 1000)
+
+# MEAN BLANKS BY PLATE + TREATMENT  :::::::::::::::::::::::::::::::::::::::
+# data
+MeanBlanks_15dpf <- AUC_calculate_15dpf.Blanks.OM %>% 
+                        dplyr::group_by(PlateID) %>% 
+                        dplyr::summarise(
+                          meanAUC = mean(AUC)
+                        )
+
+
+# MERGE BLANKS WITH SAMPLES, CALCULATE AUC_COR AND AUC_ADJ  ::::::::::::::
+AUC_calculate_15dpf <- merge(AUC_calculate_15dpf.Samples, MeanBlanks_15dpf, by = "PlateID") %>%  # merge by plateID
+                                            dplyr::mutate(
+                                              AUC.cor = AUC - meanAUC,
+                                              AUC.cor.norm = AUC.cor / Count,
+                                              Family_EBV = dplyr::case_when(Family > 50 ~ 'Low',
+                                                              Family < 20 ~ 'High')
+                                              ) %>% 
+                                            dplyr::filter(AUC.cor >= 0) %>% # omits negative, AUC samples less than blank
+                                            dplyr::select(
+                                              "Date",
+                                              "Age",
+                                              "Treatment",
+                                              "PlateID",
+                                              "Well",
+                                              "Family",
+                                              "Family_EBV",
+                                              "Count",
+                                              "AUC",
+                                              "AUC.cor",
+                                              "AUC.cor.norm"
+                                            )
+
+```
+
+```{r 15 dpf clean plotting}
+# PLOTTING ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# AUC corrected adn normalized, all data by family and treatment
+ggplot(AUC_calculate_15dpf, aes(x = as.factor(Family), y = AUC.cor.norm)) + 
+  geom_point() + facet_wrap(~Treatment)
+
+
+# means SE data, for pub 
+AUC_calculate_15dpf.PLOT <- ggplot(data =AUC_calculate_15dpf, 
+                                   aes(x=as.factor(Family), 
+                                       y = AUC.cor.norm)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 15 dpf"
+                                    ) +
+                                    theme_classic() +
+                                    facet_wrap(~Treatment)
+
+
+AUC_calculate_15dpf.PLOT2 <- ggplot(data =AUC_calculate_15dpf, 
+                                   aes(x=as.factor(Family_EBV), 
+                                       y = AUC.cor.norm, 
+                                        group =  Family_EBV, 
+                                        color = Family_EBV)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 15 dpf"
+                                    ) +
+                                    theme_classic() +
+                                    facet_wrap(~Treatment)
+
+
+AUC_calculate_15dpf.PLOT3a <- ggplot(data =AUC_calculate_15dpf, 
+                                   aes(x=Treatment, 
+                                       y = AUC.cor.norm, 
+                                        group =  Family_EBV, 
+                                        color = Family_EBV)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 15 dpf"
+                                    )  +
+                                    geom_smooth(method = "loess",               
+                                                se = TRUE,                      
+                                                level = 0.95,
+                                                span = 0.8)  +
+                                    theme_classic() 
+
+AUC_calculate_15dpf.PLOT3b <- ggplot(data =AUC_calculate_15dpf, 
+                                   aes(x=Treatment, 
+                                       y = AUC.cor.norm, 
+                                        group =  Family, 
+                                        color = Family_EBV)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 15 dpf"
+                                    )  +
+                                    geom_smooth(method = "loess", se = FALSE) +
+                                    theme_classic() + 
+                                    facet_wrap(~Family_EBV)
+
+AUC_calculate_15dpf.PLOT4 <- ggplot(AUC_calculate_15dpf, 
+                                    aes(x = Treatment, 
+                                        y = AUC.cor.norm, 
+                                        group =  Family_EBV, 
+                                        color = Family_EBV)) +
+                                      stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    geom_smooth(method = "loess",               
+                                                se = TRUE,                      
+                                                level = 0.95,
+                                                span = 0.8)  +
+                                    theme_classic() + 
+                                    facet_wrap(~Family)
+
+
+```
+
+
+#### 48 dpf data 
+  * temperatures 26, 30, 34, and 38C
+  * normalized by count (# of individuals counted per well, fixed in formalin)
+  * true blanks are denoted as 'Blank' in the "Type" column
+```{r 48 dpf clean}
+# dataset == AUC_calculate_48dpf
+unique(AUC_calculate_48dpf$Treatment)
+
+
+# SAMPLES  :::::::::::::::::::::::::::::::::::::::
+# data
+AUC_calculate_48dpf.Samples <- AUC_calculate_48dpf %>% dplyr::filter(Type %in% 'Sample' & Count != 0)
+# raw plot to view well bias (potential) 
+ggplot(data =AUC_calculate_48dpf.Samples, aes(x=Well, y = AUC)) +
+       geom_point() + 
+       labs(title = "View the AUC for samples by well") +
+       facet_wrap(~Treatment)
+# verdict: NO DISCERNABLE WELL BIAS
+
+
+# BLANKS  :::::::::::::::::::::::::::::::::::::::
+# data
+AUC_calculate_48dpf.Blanks  <- AUC_calculate_48dpf %>% dplyr::filter(Type %in% 'Blank') 
+# raw plot to view well bias (potential) 
+
+ggplot(data =AUC_calculate_48dpf.Blanks, aes(x=Well, y = AUC)) +
+       geom_point() + 
+       labs(title = "View the AUC for blanks for shell (1) and no shell (NA)") +
+       facet_wrap(~Count)
+# verdict:  YES, blanks with an empty shell included are higher!
+
+# MEAN BLANKS BY PLATE + TREATMENT  :::::::::::::::::::::::::::::::::::::::
+# data
+MeanBlanks_48dpf <- AUC_calculate_48dpf.Blanks %>% 
+                        dplyr::group_by(PlateID, Count) %>% 
+                        dplyr::summarise(
+                          meanAUC = mean(AUC)
+                        ) %>% 
+                        tidyr::pivot_wider(
+                          names_from = Count,
+                          values_from = meanAUC
+                        ) %>% 
+                        dplyr::rename(
+                          meanAUC.shell  = "1",
+                          meanAUC.blank  = "NA"
+                        )
+
+
+# MERGE BLANKS WITH SAMPLES, CALCULATE AUC_COR AND AUC_ADJ  ::::::::::::::
+AUC_calculate_48dpf <- merge(AUC_calculate_48dpf.Samples, MeanBlanks_48dpf, by = "PlateID") %>%  # merge by plateID
+                                            dplyr::mutate(
+                                              AUC.cor = AUC - meanAUC.blank,
+                                              AUC.corSHELL = AUC - meanAUC.shell,
+                                              AUC.cor.norm = AUC.corSHELL / Count,
+                                              Family_EBV = dplyr::case_when(Family > 50 ~ 'Low',
+                                                              Family < 20 ~ 'High')
+                                              ) %>% 
+                                            dplyr::filter(AUC.corSHELL >= 0) %>% # omits negative, AUC samples less than blank
+                                            dplyr::select(
+                                              "Date",
+                                              "Age",
+                                              "Treatment",
+                                              "PlateID",
+                                              "Well",
+                                              "Family",
+                                              "Family_EBV",
+                                              "Count",
+                                              "AUC",
+                                              "AUC.cor",
+                                              "AUC.cor.norm"
+                                            )
+
+```
+
+```{r 48 dpf clean plotting}
+# PLOTTING ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# AUC corrected adn normalized, all data by family and treatment
+ggplot(AUC_calculate_48dpf, aes(x = as.factor(Family), y = AUC.cor.norm)) + 
+  geom_point() + facet_wrap(~Treatment)
+
+
+# means SE data, for pub 
+AUC_calculate_48dpf.PLOT <- ggplot(data =AUC_calculate_48dpf, 
+                                   aes(x=as.factor(Family), 
+                                       y = AUC.cor.norm)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 48 dpf"
+                                    ) +
+                                    theme_classic() +
+                                    facet_wrap(~Treatment)
+
+
+AUC_calculate_48dpf.PLOT2 <- ggplot(data =AUC_calculate_48dpf, 
+                                   aes(x=as.factor(Family_EBV), 
+                                       y = AUC.cor.norm, 
+                                        group =  Family_EBV, 
+                                        color = Family_EBV)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 48 dpf"
+                                    ) +
+                                    theme_classic() +
+                                    facet_wrap(~Treatment)
+
+
+AUC_calculate_48dpf.PLOT3a <- ggplot(data =AUC_calculate_48dpf, 
+                                   aes(x=Treatment, 
+                                       y = AUC.cor.norm, 
+                                        group =  Family_EBV, 
+                                        color = Family_EBV)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0.2
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 48 dpf"
+                                    )  +
+                                    geom_smooth(method = "loess",               
+                                                se = TRUE,                      
+                                                level = 0.95,
+                                                span = 0.8)  +
+                                    theme_classic() 
+
+
+AUC_calculate_48dpf.PLOT3b <- ggplot(data =AUC_calculate_48dpf, 
+                                   aes(x=Treatment, 
+                                       y = AUC.cor.norm, 
+                                        group =  Family, 
+                                        color = Family_EBV)) +
+                                    stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    labs(
+                                      x = "Treatment",
+                                      y = "Area under curve (Resazurin, normalized to count)",
+                                      title = "C. magallana larvae @ 48 dpf"
+                                    )  +
+                                    geom_smooth(method = "loess", se = FALSE) +
+                                    theme_classic() + 
+                                    facet_wrap(~Family_EBV)
+
+AUC_calculate_48dpf.PLOT4 <- ggplot(AUC_calculate_48dpf, 
+                                    aes(x = Treatment, 
+                                        y = AUC.cor.norm, 
+                                        group =  Family_EBV, 
+                                        color = Family_EBV)) +
+                                      stat_summary(
+                                      fun = mean,
+                                      geom = "point",
+                                      size = 3
+                                    ) +
+                                    stat_summary(
+                                      fun.data = mean_se,
+                                      geom = "errorbar",
+                                      width = 0
+                                    ) +
+                                    geom_smooth(method = "loess",               
+                                                se = TRUE,                      
+                                                level = 0.95,
+                                                span = 0.8)  +
+                                    theme_classic() + 
+                                    facet_wrap(~Family)
+
+
+```
+
+
+
+```{r}
+
+ggarrange(
+  AUC_calculate_15dpf.PLOT3a,AUC_calculate_15dpf.PLOT3b,
+  AUC_calculate_48dpf.PLOT3a, AUC_calculate_48dpf.PLOT3b,
+  nrow=2,
+  ncol=2
+)
+
+```
+
+```{r}
+
+
+
+```
+
+```{r}
+
+
+
+```
+
+
