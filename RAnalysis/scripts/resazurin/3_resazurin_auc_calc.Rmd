@@ -8,8 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 # SET WORKING DIRECTORY 
-# knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's
-knitr::opts_knit$set(root.dir = "~/Documents/Predictive_phenomics/RAnalysis") # Anna's root dir on her computer
+knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's
+#knitr::opts_knit$set(root.dir = "~/Documents/Predictive_phenomics/RAnalysis") # Anna's root dir on her computer
 ```
 
 
@@ -21,7 +21,7 @@ library(ggplot2)
 library(ggpubr)
 ```
 
-```{r}
+```{r load raw}
 
 # metadata
 metadata_counts <- read.csv("data/Pacific_oyster/resazurin/metadata.csv", sep=',')
@@ -30,7 +30,7 @@ families        <- read.csv("data/Pacific_oyster/YC26-ebv-crosses-broodpops.csv"
 
 # outputs from 1_resazurin_raw_compiler
 # life stages during larval development
-rawdf_72hpf         <- read.csv("output/resazurin/raw/rawdf_72hpf.csv")
+rawdf_72hpf         <- read.csv("output/resazurin/raw/rawdf_72hpf.csv") %>%  dplyr::filter(!PlateID %in% 'plate_1_low') %>% dplyr::filter(!Note %in% c('has no volume', 'has no volume ', 'has low volume', 'has less volume'))
 rawdf_15dpf         <- read.csv("output/resazurin/raw/rawdf_15dpf.csv")
 rawdf_48dpf         <- read.csv("output/resazurin/raw/rawdf_48dpf.csv")
 # temperature ramp experiment
@@ -42,13 +42,21 @@ rawdf_20260628_26C  <- read.csv("output/resazurin/raw/rawdf_20260628_26C.csv")
 
 rawdf_20260630_28C  <- read.csv("output/resazurin/raw/rawdf_20260630_28C.csv")
 
-rawdf_20260702_30C  <- read.csv("output/resazurin/raw/rawdf_20260702_30C.csv")
-
 rawdf_20260704_32C  <- read.csv("output/resazurin/raw/rawdf_20260704_32C.csv")
+
+rawdf_20260702_30C  <- read.csv("output/resazurin/raw/rawdf_20260702_30C.csv")
 
 rawdf_20260706_34C  <- read.csv("output/resazurin/raw/rawdf_20260706_34C.csv")
 
 rawdf_20260710_38C  <- read.csv("output/resazurin/raw/rawdf_20260710_38C.csv")
+
+```
+
+
+```{r data adj}
+adjdf_72hpf <- rawdf_72hpf %>% dplyr::filter(!PlateID %in% 'plate_1_low',
+                                             !Note %in% c('has no volume', 'has no volume ', 'has low volume', 'has less volume'),
+                                             !Count %in% 0)
 
 ```
 
@@ -109,8 +117,9 @@ AUC_calculate <- function (file_in) {
       
                            } # wells within plate m end
             
-            return(output.df)
-            
+            return(list(DeltaFlo.df = output.cumulative.df,
+                        AUC.df      = output.df
+                        ))            
 } # function end
 ```
 
@@ -200,7 +209,7 @@ AUC_calculate_TempRamp <- function (file_in) {
 ```{r run AUC_calculate function}
 
 # run function AUC_calculate
-AUC_calculate_72hpf  <- AUC_calculate(rawdf_72hpf)
+AUC_calculate_72hpf  <- AUC_calculate(adjdf_72hpf) # omit plate 1 low 
 AUC_calculate_15dpf  <- AUC_calculate(rawdf_15dpf)
 AUC_calculate_48dpf  <- AUC_calculate(rawdf_48dpf)
 
@@ -213,20 +222,47 @@ AUC_calculate_20260702_30C  <- AUC_calculate_TempRamp(rawdf_20260702_30C)
 AUC_calculate_20260704_32C  <- AUC_calculate_TempRamp(rawdf_20260704_32C) 
 AUC_calculate_20260706_34C  <- AUC_calculate_TempRamp(rawdf_20260706_34C)
 AUC_calculate_20260710_38C  <- AUC_calculate_TempRamp(rawdf_20260710_38C) 
+
+AUC_calculate_72hpf
+
+AUC_calculate_20260622_20C
 ```
 
 
+```{r view outliers}
+
+# 72 hpf
+
+x.df72_plate_1_high <- ((AUC_calculate_72hpf$DeltaFlo.df %>%  dplyr::filter(PlateID %in% 'plate_1_high') %>%  dplyr::filter(Type %in% 'Blank'))$AUC)
+boxplot.stats(x.df72_plate_1_high)$out # ouliter = 1731.65 AUC
+
+
+x.df72_plate_2_high <- ((AUC_calculate_72hpf$DeltaFlo.df %>%  dplyr::filter(PlateID %in% 'plate_2_high') %>%  dplyr::filter(Type %in% 'Blank'))$AUC)
+boxplot.stats(x.df72_plate_2_high)$out# outlier AUC = 1927.892
+
+x.df72_plate_2_low <- ((AUC_calculate_72hpf$DeltaFlo.df %>%  dplyr::filter(PlateID %in% 'plate_2_low') %>%  dplyr::filter(Type %in% 'Blank'))$AUC)
+boxplot.stats(x.df72_plate_2_low)$out # no outliers
+
+# omit the two outliers from both dataframes 
+AUC_calculate_72hpf$DeltaFlo.df <- (AUC_calculate_72hpf$DeltaFlo.df) %>% dplyr::filter(!(Type %in% 'Blank' & AUC >= 1731.650))
+AUC_calculate_72hpf$AUC.df <- (AUC_calculate_72hpf$AUC.df) %>% dplyr::filter(!(Type %in% 'Blank' & AUC >= 1731.650))
+# View((AUC_calculate_72hpf$DeltaFlo.df))
+```
 
 
 ## Plot data 
 
 ```{r Plot data}
 
-ggplot(data = AUC_calculate_72hpf$AUC,
-       aes(x = time,
-           y = AUC)) +
-      geom_point() +
-      geom_line()
+
+ggplot(data = (AUC_calculate_72hpf$DeltaFlo.df),
+    aes(x = time,
+        y = delta_florescence,
+        group = Well,
+        color = Type)) +
+    geom_point() +
+    geom_line() +
+  facet_wrap(~PlateID)
 
 
 ggplot(data = AUC_calculate_20260622_20C$DeltaFlo.df,
@@ -318,7 +354,9 @@ ggplot(data = AUC_calculate_20260710_38C$DeltaFlo.df,
 
 # SAMPLES  :::::::::::::::::::::::::::::::::::::::
 # data
-AUC_calculate_72hpf.Samples <- AUC_calculate_72hpf %>% dplyr::filter(Type %in% 'Sample' & Count != 0)
+AUC_calculate_72hpf.Samples <- AUC_calculate_72hpf$AUC.df %>% dplyr::filter(Type %in% 'Sample')
+nrow(AUC_calculate_72hpf$AUC.df )
+nrow(AUC_calculate_72hpf.Samples)
 #  raw plot to view well relationship with count
 ggplot(data =AUC_calculate_72hpf.Samples, aes(x=Count, y = AUC)) +
        geom_point() + 
@@ -335,7 +373,7 @@ ggplot(data =AUC_calculate_72hpf.Samples, aes(x=Well, y = AUC)) +
 
 # BLANKS  :::::::::::::::::::::::::::::::::::::::
 # data
-AUC_calculate_72hpf.Blanks  <- AUC_calculate_72hpf %>% dplyr::filter(Type %in% 'Sample' & Count == 0) 
+AUC_calculate_72hpf.Blanks  <-  AUC_calculate_72hpf$AUC.df %>% dplyr::filter(Type %in% 'Blank') 
 # raw plot to view well bias (potential) 
 
 ggplot(data =AUC_calculate_72hpf.Blanks, aes(x=Well, y = AUC)) +
@@ -349,14 +387,14 @@ ggplot(data =AUC_calculate_72hpf.Blanks, aes(x=Well, y = AUC)) +
 MeanBlanks_72hpf <- AUC_calculate_72hpf.Blanks %>% 
                         dplyr::group_by(PlateID) %>% 
                         dplyr::summarise(
-                          meanAUC = mean(AUC)
+                          meanBlank.AUC = mean(AUC)
                         )
 
 
 # MERGE BLANKS WITH SAMPLES, CALCULATE AUC_COR AND AUC_ADJ  ::::::::::::::
 AUC_calculate_72hpf <- merge(AUC_calculate_72hpf.Samples, MeanBlanks_72hpf, by = "PlateID") %>%  # merge by plateID
                                             dplyr::mutate(
-                                              AUC.cor = AUC - meanAUC,
+                                              AUC.cor = AUC - meanBlank.AUC,
                                               AUC.cor.norm = AUC.cor / Count,
                                               Family_EBV = dplyr::case_when(Family > 50 ~ 'Low',
                                                               Family < 20 ~ 'High')
@@ -371,12 +409,14 @@ AUC_calculate_72hpf <- merge(AUC_calculate_72hpf.Samples, MeanBlanks_72hpf, by =
                                               "Family",
                                               "Family_EBV",
                                               "Count",
+                                              "meanBlank.AUC",
                                               "AUC",
                                               "AUC.cor",
                                               "AUC.cor.norm"
                                             )
   
-
+nrow(AUC_calculate_72hpf)
+nrow(AUC_calculate_72hpf.Samples)
 # PLOTTING ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # AUC corrected adn normalized, all data by family and treatment
 ggplot(AUC_calculate_72hpf, aes(x = as.factor(Family), y = AUC.cor.norm)) + 
@@ -444,33 +484,35 @@ AUC_calculate_72hpf.PLOT3a <- ggplot(data =AUC_calculate_72hpf,
                                       geom = "errorbar",
                                       width = 0.2
                                     ) +
+                                    geom_jitter() +                                   
                                     labs(
                                       x = "Treatment",
                                       y = "Area under curve (Resazurin, normalized to count)",
                                       title = "M. gigas larvae @ 72 hpf"
                                     )  +
-                                    geom_smooth(method = "loess",               
-                                                se = TRUE,                      
-                                                level = 0.95,
-                                                span = 0.8)  +
+                                    # geom_smooth(method = "loess",               
+                                    #             se = TRUE,                      
+                                    #             level = 0.95,
+                                    #             span = 0.8)  +
                                     theme_classic() 
 
-AUC_calculate_72hpf.PLOT3b <- ggplot(data =AUC_calculate_72hpf, 
-                                   aes(x=Treatment, 
-                                       y = AUC.cor.norm, 
-                                        group =  Family, 
+AUC_calculate_72hpf.PLOT3b <- ggplot(data =AUC_calculate_72hpfMEANS, 
+                                   aes(x=as.factor(Treatment), 
+                                       y = as.numeric(meanAUC.cor.norm), 
+                                        group =  as.factor(Family), 
                                         color = Family_EBV)) +
-                                    stat_summary(
-                                      fun = mean,
-                                      geom = "point",
-                                      size = 3
-                                    ) +
+                                    geom_point() +
+                                    # stat_summary(
+                                    #   fun = mean,
+                                    #   geom = "point",
+                                    #   size = 3
+                                    # ) +
                                     labs(
                                       x = "Treatment",
                                       y = "Area under curve (Resazurin, normalized to count)",
                                       title = "M. gigas larvae @ 72 hpf"
                                     )  +
-                                    geom_smooth(method = "loess", se = FALSE) +
+                                     geom_smooth(method = "lm", se = FALSE) +
                                     theme_classic() + 
                                     facet_wrap(~Family_EBV)
 
@@ -496,6 +538,117 @@ AUC_calculate_72hpf.PLOT4 <- ggplot(AUC_calculate_72hpf,
                                     theme_classic() + 
                                     facet_wrap(~Family)
 
+AUC_calculate_72hpfMEANS <- AUC_calculate_72hpf %>% group_by(Family, Treatment, Family_EBV) %>% dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm))
+
+
+
+dodge_width <- 0.70
+
+
+
+AUC_calculate_72hpfMEANS$Family_EBV <- factor(
+  AUC_calculate_72hpfMEANS$Family_EBV,
+  levels = c("Low", "High")
+)
+
+      
+Plot_72hpf_MEAN.SE <- ggplot(
+                            AUC_calculate_72hpfMEANS,
+                            aes(
+                              x = Treatment,
+                              y = meanAUC.cor.norm,
+                              colour = Family_EBV,
+                              fill = Family_EBV,
+                              group = Family_EBV
+                            )
+                          ) +
+                            geom_point(
+                              shape = 21,
+                              size = 2.4,
+                              alpha = 0.55,
+                              position = position_jitterdodge(
+                                jitter.width = 0.12,
+                                dodge.width = dodge_width,
+                                seed = 123
+                              )
+                            ) +
+                            scale_fill_manual(values = c('#0072B2', '#E69F00')) +
+                            stat_summary(
+                              fun = mean,
+                              geom = "point",
+                              shape = 21,
+                              size = 4,
+                              colour = "black",
+                              position = position_dodge(width = dodge_width)
+                            ) +
+                            stat_summary(
+                              fun.data = mean_se,
+                              geom = "errorbar",
+                              width = 0.12,
+                              linewidth = 0.8,
+                              colour = "black",
+                              position = position_dodge(width = dodge_width)
+                            ) +
+                            labs(
+                              title = "72 hpf",
+                              x = "Temperature treatment",
+                              y = "AUC (per individual)",
+                              colour = "Independent variable 2",
+                              fill = "Independent variable 2"
+                            ) +
+                            theme_classic() +
+                            theme(legend.position = "none") 
+      
+
+
+```
+
+
+
+
+```{r stats for 72 hpf}
+
+# run two modefls one for 26C and one for 32 C
+
+AUC_calculate_72hpfMEANS_26C <- AUC_calculate_72hpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '26C') %>% 
+                                      dplyr::mutate(
+                                        Family_EBV_num =
+                                        dplyr::case_when(Family_EBV %in% 'Low' ~ 1,
+                                                  Family_EBV %in% 'High' ~ 2,
+                                                  )
+                                      )
+# check for normality 
+by(AUC_calculate_72hpfMEANS_26C$meanAUC.cor.norm, AUC_calculate_72hpfMEANS_26C$Family_EBV, shapiro.test) # 0.5897 - normal
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_72hpfMEANS_26C) # 0.7377 - can not assume homogeneity of variance 
+# data are both normal and have homogeneity of varianbce - proced with students t test
+t.test(AUC_calculate_72hpfMEANS_26C$Family_EBV_num,
+       AUC_calculate_72hpfMEANS_26C$meanAUC.cor.norm) # 0.1828 not significant
+
+
+
+
+
+AUC_calculate_72hpfMEANS_32C <- AUC_calculate_72hpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '32C') %>% 
+                                      dplyr::mutate(
+                                        Family_EBV_num =
+                                        dplyr::case_when(Family_EBV %in% 'Low' ~ 1,
+                                                  Family_EBV %in% 'High' ~ 2,
+                                                  )
+                                      )
+
+
+t.test(AUC_calculate_72hpfMEANS_32C$Family_EBV_num,
+       AUC_calculate_72hpfMEANS_32C$meanAUC.cor.norm)
+
+# two assumptions - normality of data (or residuals) and homogeneity of variance 
+# shapiro wilk for normalityu and levenes test for homogeneity of variance 
+by(AUC_calculate_72hpfMEANS$meanAUC.cor.norm, AUC_calculate_72hpfMEANS$Family_EBV, shapiro.test) # 0.001365 - non normal
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_72hpfMEANS_32C) # 0.04428 * - can not assume homogeneity of variance 
+# can not use t test becuase data do not abide by model assumptions 
+# Wilcox rank sum tewst
+wilcox.test(meanAUC.cor.norm ~ Family_EBV_num, data = AUC_calculate_72hpfMEANS_32C) # 0.008658
 ```
 
 
@@ -697,6 +850,67 @@ AUC_calculate_15dpf.PLOT4 <- ggplot(AUC_calculate_15dpf,
                                     facet_wrap(~Family)
 
 
+
+AUC_calculate_15dpfMEANS <- AUC_calculate_15dpf %>% group_by(Family, Treatment, Family_EBV) %>% dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm))
+
+
+
+dodge_width <- 0.70
+
+
+
+AUC_calculate_15dpfMEANS$Family_EBV <- factor(
+  AUC_calculate_15dpfMEANS$Family_EBV,
+  levels = c("Low", "High")
+)
+      
+Plot_15dpf_MEAN.SE <- ggplot(
+                            AUC_calculate_15dpfMEANS,
+                            aes(
+                              x = Treatment,
+                              y = meanAUC.cor.norm,
+                              colour = Family_EBV,
+                              fill = Family_EBV,
+                              group = Family_EBV
+                            )
+                          ) +
+                            geom_point(
+                              shape = 21,
+                              size = 2.4,
+                              alpha = 0.55,
+                              position = position_jitterdodge(
+                                jitter.width = 0.12,
+                                dodge.width = dodge_width,
+                                seed = 123
+                              )
+                            ) +
+                            scale_fill_manual(values = c('#0072B2', '#E69F00')) +
+                            stat_summary(
+                              fun = mean,
+                              geom = "point",
+                              shape = 21,
+                              size = 4,
+                              colour = "black",
+                              position = position_dodge(width = dodge_width)
+                            ) +
+                            stat_summary(
+                              fun.data = mean_se,
+                              geom = "errorbar",
+                              width = 0.12,
+                              linewidth = 0.8,
+                              colour = "black",
+                              position = position_dodge(width = dodge_width)
+                            ) +
+                            labs(
+                              title = "15 dpf",
+                              x = "Temperature treatment",
+                              y = "AUC (per individual)",
+                              colour = "Independent variable 2",
+                              fill = "Independent variable 2"
+                            ) +
+                            theme_classic() +
+                            theme(legend.position = "none") 
+
 ```
 
 
@@ -706,14 +920,21 @@ AUC_calculate_15dpf.PLOT4 <- ggplot(AUC_calculate_15dpf,
   * true blanks are denoted as 'Blank' in the "Type" column
 ```{r 48 dpf clean}
 # dataset == AUC_calculate_48dpf
-unique(AUC_calculate_48dpf$Treatment)
+unique((AUC_calculate_48dpf$AUC.df)$Treatment)
+
+
+metadata_48dpf <- metadata_counts %>% dplyr::filter(Age %in% '48dpf') %>% dplyr::select(Family, Treatment, Well, Area_ImageJ)
+
 
 
 # SAMPLES  :::::::::::::::::::::::::::::::::::::::
 # data
-AUC_calculate_48dpf.Samples <- AUC_calculate_48dpf %>% dplyr::filter(Type %in% 'Sample' & Count != 0)
+AUC_calculate_48dpf.Samples <- AUC_calculate_48dpf$AUC.df %>% dplyr::filter(Type %in% 'Sample' & Count != 0)
+nrow(AUC_calculate_48dpf.Samples) # 336
+AUC_calculate_48dpf.Samples.merge <- merge(metadata_48dpf, AUC_calculate_48dpf.Samples)
+
 # raw plot to view well bias (potential) 
-ggplot(data =AUC_calculate_48dpf.Samples, aes(x=Well, y = AUC)) +
+ggplot(data =AUC_calculate_48dpf.Samples.merge, aes(x=Well, y = AUC)) +
        geom_point() + 
        labs(title = "View the AUC for samples by well") +
        facet_wrap(~Treatment)
@@ -722,7 +943,7 @@ ggplot(data =AUC_calculate_48dpf.Samples, aes(x=Well, y = AUC)) +
 
 # BLANKS  :::::::::::::::::::::::::::::::::::::::
 # data
-AUC_calculate_48dpf.Blanks  <- AUC_calculate_48dpf %>% dplyr::filter(Type %in% 'Blank') 
+AUC_calculate_48dpf.Blanks  <- AUC_calculate_48dpf$AUC.df %>% dplyr::filter(Type %in% 'Blank') 
 # raw plot to view well bias (potential) 
 
 ggplot(data =AUC_calculate_48dpf.Blanks, aes(x=Well, y = AUC)) +
@@ -749,11 +970,11 @@ MeanBlanks_48dpf <- AUC_calculate_48dpf.Blanks %>%
 
 
 # MERGE BLANKS WITH SAMPLES, CALCULATE AUC_COR AND AUC_ADJ  ::::::::::::::
-AUC_calculate_48dpf <- merge(AUC_calculate_48dpf.Samples, MeanBlanks_48dpf, by = "PlateID") %>%  # merge by plateID
+AUC_calculate_48dpf <- merge(AUC_calculate_48dpf.Samples.merge, MeanBlanks_48dpf, by = "PlateID") %>%  # merge by plateID
                                             dplyr::mutate(
                                               AUC.cor = AUC - meanAUC.blank,
                                               AUC.corSHELL = AUC - meanAUC.shell,
-                                              AUC.cor.norm = AUC.corSHELL / Count,
+                                              AUC.cor.norm = AUC.corSHELL / Area_ImageJ, # divided by sahell area,
                                               Family_EBV = dplyr::case_when(Family > 50 ~ 'Low',
                                                               Family < 20 ~ 'High')
                                               ) %>% 
@@ -897,6 +1118,65 @@ AUC_calculate_48dpf.PLOT4 <- ggplot(AUC_calculate_48dpf,
                                     facet_wrap(~Family)
 
 
+AUC_calculate_48dpfMEANS <- AUC_calculate_48dpf %>% group_by(Family, Treatment, Family_EBV) %>% dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm))
+
+
+
+dodge_width <- 0.70
+
+
+
+AUC_calculate_48dpf$Family_EBV <- factor(
+  AUC_calculate_48dpf$Family_EBV,
+  levels = c("Low", "High")
+)
+      
+Plot_48dpf_MEAN.SE <- ggplot(
+                            AUC_calculate_48dpfMEANS,
+                            aes(
+                              x = Treatment,
+                              y = meanAUC.cor.norm,
+                              colour = Family_EBV,
+                              fill = Family_EBV,
+                              group = Family_EBV
+                            )
+                          ) +
+                            geom_point(
+                              shape = 21,
+                              size = 2.4,
+                              alpha = 0.55,
+                              position = position_jitterdodge(
+                                jitter.width = 0.12,
+                                dodge.width = dodge_width,
+                                seed = 123
+                              )
+                            ) +
+                            scale_fill_manual(values = c('#0072B2', '#E69F00')) +
+                            stat_summary(
+                              fun = mean,
+                              geom = "point",
+                              shape = 21,
+                              size = 4,
+                              colour = "black",
+                              position = position_dodge(width = dodge_width)
+                            ) +
+                            stat_summary(
+                              fun.data = mean_se,
+                              geom = "errorbar",
+                              width = 0.12,
+                              linewidth = 0.8,
+                              colour = "black",
+                              position = position_dodge(width = dodge_width)
+                            ) +
+                            labs(
+                              title = "48 dpf",
+                              x = "Temperature treatment",
+                              y = "AUC (individual shell area)",
+                              colour = "Independent variable 2",
+                              fill = "Independent variable 2"
+                            ) +
+                            theme_classic() +
+                            theme(legend.position = "none") 
 ```
 
 ```{r Output CalculatedAUC larvae and early seed}
@@ -906,9 +1186,17 @@ Master_larvae_seed <- rbind(AUC_calculate_72hpf,
                             AUC_calculate_48dpf)
 
 
+Resaz_larval_juvenile_MEANse <- ggpubr::ggarrange(Plot_72hpf_MEAN.SE,
+                                                  Plot_15dpf_MEAN.SE,
+                                                  Plot_48dpf_MEAN.SE,
+                                                  nrow=3)
+
 write.csv(Master_larvae_seed, "output/resazurin/calculated/CalulatedAUC_Master_larvae_earlyseed.csv")
 
 
+pdf("output/resazurin/Resaz_larval_juvenile_MEANse.pdf", width = 5, height = 15)
+Resaz_larval_juvenile_MEANse
+dev.off()
 
 ```
 
@@ -1035,6 +1323,74 @@ ggplot(data = Master_meansFamily,
                                                 level = 0.95,
                                                 span = 0.8)  +
                                     theme_classic() 
+ 
+ 
+ 
+
+AUC_calculate_48dpfMEANS <- AUC_calculate_48dpf %>% group_by(Family, Treatment, Family_EBV) %>% dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm))
+
+
+
+dodge_width <- 0.70
+
+
+
+Master_meansFamily$Family_EBV <- factor(
+  Master_meansFamily$Family_EBV,
+  levels = c("Low", "High")
+)
+      
+TempRamp_MEAN.SE <- ggplot(
+                            Master_meansFamily,
+                            aes(
+                              x = Treatment,
+                              y = meanAUC,
+                              colour = Family_EBV,
+                              fill = Family_EBV,
+                              group = Family_EBV
+                            )
+                          ) +
+                            geom_point(
+                              shape = 21,
+                              size = 2.4,
+                              alpha = 0.55,
+                              position = position_jitterdodge(
+                                jitter.width = 0.12,
+                                dodge.width = dodge_width,
+                                seed = 123
+                              )
+                            ) +
+                            scale_fill_manual(values = c('#0072B2', '#E69F00')) +
+                            stat_summary(
+                              fun = mean,
+                              geom = "point",
+                              shape = 21,
+                              size = 4,
+                              colour = "black",
+                              position = position_dodge(width = dodge_width)
+                            ) +
+                            stat_summary(
+                              fun.data = mean_se,
+                              geom = "errorbar",
+                              width = 0.12,
+                              linewidth = 0.8,
+                              colour = "black",
+                              position = position_dodge(width = dodge_width)
+                            ) +
+                            scale_colour_manual(values = c('#0072B2', '#E69F00')) +
+                            labs(
+                              title = "Temperature ramp with juveniles",
+                              x = "Temperature treatment",
+                              y = "AUC (per individual dry weight)",
+                              colour = "Independent variable 2",
+                              fill = "Independent variable 2"
+                            ) +
+                            geom_smooth(method = "loess",               
+                                                se = TRUE,                      
+                                                level = 0.95,
+                                                span = 0.8)  +
+                            theme_classic() +
+                            theme(legend.position = "none")
 ```
 
 
