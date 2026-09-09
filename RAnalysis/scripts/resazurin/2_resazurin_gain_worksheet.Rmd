@@ -28,8 +28,8 @@ Answer (as of 20260901)
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 # SET WORKING DIRECTORY 
-knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's
-# knitr::opts_knit$set(root.dir = "C:/ < Anna add here > /Predictive_phenomics/RAnalysis") # Anna's root dir on her computer
+# knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's
+knitr::opts_knit$set(root.dir = "~/Documents/Predictive_phenomics/RAnalysis") # Anna's root dir on her computer
 ```
 
 
@@ -107,7 +107,7 @@ AUC_calculate <- function (file_in) {
 } # function end
 
 
-AUC_calculate <- function (file_in) {
+AUC_calculate_TempRamp <- function (file_in) {
 
                 output.df   <- data.frame()
                 loop.df_m   <- data.frame(unique(file_in$gain))  # call specific df
@@ -181,19 +181,29 @@ AUC_calculate <- function (file_in) {
 
 ```{r load test data at 30 and 34C}
 
-rawdf_02072026_30C <- read.csv("output/resazurin/raw/rawdf_02072026_30C.csv") %>% 
+rawdf_02072026_30C <- read.csv("output/resazurin/raw/rawdf_20260702_30C.csv") %>% 
                                   dplyr::mutate(time = as.POSIXct(time)) %>% 
                                   dplyr::mutate(Treatment = "30C",
+                                                flourescence = as.numeric(flourescence),
                                                 Age = 105,
                                                 Family = NA,
                                                 Type = NA,
                                                 Count = NA) # from 20260317 to 20260630
                                   
-rawdf_02072026_34C <- read.csv("output/resazurin/raw/rawdf_06072026_34C.csv") %>% 
+rawdf_06072026_34C <- read.csv("output/resazurin/raw/rawdf_20260706_34C.csv") %>% 
                                   dplyr::mutate(time = as.POSIXct(time)) %>% 
                                   dplyr::mutate(Treatment = "34C",
                                                 flourescence = as.numeric(flourescence),
                                                 Age = 109,
+                                                Family = NA,
+                                                Type = NA,
+                                                Count = NA) # from 20260317 to 20260630
+
+rawdf_30062026_28C  <- read.csv("output/resazurin/raw/rawdf_20260630_28C.csv") %>% 
+                                  dplyr::mutate(time = as.POSIXct(time)) %>% 
+                                  dplyr::mutate(Treatment = "28C",
+                                                flourescence = as.numeric(flourescence),
+                                                Age = 105,
                                                 Family = NA,
                                                 Type = NA,
                                                 Count = NA) # from 20260317 to 20260630
@@ -203,14 +213,38 @@ rawdf_02072026_34C <- read.csv("output/resazurin/raw/rawdf_06072026_34C.csv") %>
 
 ```{r calc AUC}
 
-AUC_105dpf_30C <- AUC_calculate(rawdf_02072026_30C)
-AUC_105dpf_30C$dataframe
-AUC_109dpf_34C <- AUC_calculate(rawdf_02072026_34C)
+AUC_107dpf_30C <- AUC_calculate_TempRamp(rawdf_02072026_30C)
+AUC_107dpf_30C$dataframe
+AUC_109dpf_34C <- AUC_calculate_TempRamp(rawdf_06072026_34C)
+AUC_105dpf_28C <- AUC_calculate_TempRamp(rawdf_30062026_28C)
 
 ```
 
 
 ## Calculating area under the curve
+
+  * attempting to adjust 28C
+```{r seed 28C auc calc function}
+rawdf_30062026_28C_adj  <- rawdf_30062026_28C %>% dplyr::filter(timepoint %in% "T3")
+
+gain70 <- rawdf_30062026_28C_adj %>% filter(gain == 70) %>% select(Well, Treatment, fluor_70 = flourescence)
+gain77 <- rawdf_30062026_28C_adj %>% filter(gain == 77) %>% select(Well, Treatment, fluor_77 = flourescence)
+
+paired <- inner_join(gain70, gain77, by = c("Well", "Treatment"))
+
+model <- lm(fluor_77 ~ fluor_70, data = paired)
+model_summary <- summary (model)
+
+slope <- coef(model)[["fluor_70"]]
+intercept <- coef(model) [["(Intercept)"]]
+r_squared <- model_summary$r.squared
+
+cat("=== LINEAR REGRESSION: Gain77 ~ Gain70 ===\n")
+cat(sprintf("  Slope (conversion factor k): %.4f\n", slope))
+cat(sprintf("  Intercept (b):               %.2f\n", intercept))
+cat(sprintf("  R²:                          %.6f\n\n", r_squared))
+ 
+```  
 
   * as of 9/2/2026 using pracma::trapz - pracma lackage and the call is trapz, use ?trapz to learn more
 
@@ -310,8 +344,8 @@ Note: call specific df
 ```{r seed 34C auc calc function}
 
 output.df   <- data.frame()
-loop.df_m   <- data.frame(unique(rawdf_02072026_34C$gain))  # call specific df
-loop.df_i   <- data.frame(unique(rawdf_02072026_34C$Well))  # call specific df
+loop.df_m   <- data.frame(unique(rawdf_06072026_34C$gain))  # call specific df
+loop.df_i   <- data.frame(unique(rawdf_06072026_34C$Well))  # call specific df
 
 # Call the cumulative dataframe that we will write to in the for loop below
 output.cumulative.df <- data.frame() # start dataframe 
@@ -321,7 +355,7 @@ running.df           <- data.frame(matrix(nrow = 1, ncol = 10)) # create datafra
 colnames(running.df) <- c('Date', 'Treatment', 'PlateID', 'Age', 'Well', 'Family', 'Type', 'Count', 'AUC', 'gain') # names for columns in the for loop
 
 for(m in 1:nrow(loop.df_m)){
-  plate_id      <- rawdf_02072026_34C %>%   # call specific df !!! change to data_merged_seed34C <METADATA NEEDED FOR THIS!>
+  plate_id      <- rawdf_06dd072026_34C %>%   # call specific df !!! change to data_merged_seed34C <METADATA NEEDED FOR THIS!>
                                 dplyr::filter(gain %in% loop.df_m[m,1])
 for(i in 1:nrow(loop.df_i)){
   plate_id$flourescence <- as.numeric(plate_id$flourescence)

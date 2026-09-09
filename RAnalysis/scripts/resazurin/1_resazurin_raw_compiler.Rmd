@@ -8,8 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 # SET WORKING DIRECTORY 
-knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's  root dir on his computer
-# knitr::opts_knit$set(root.dir = "C:/ < Anna add here > /Predictive_phenomics/RAnalysis") # Anna's root dir on her computer
+# knitr::opts_knit$set(root.dir = "C:/Users/gurrs/Documents/6_Github_repositories/GurrLab/Predictive_phenomics/RAnalysis") # Sam's  root dir on his computer
+knitr::opts_knit$set(root.dir = "~/Documents/Predictive_phenomics/RAnalysis") # Anna's root dir on her computer
 #knitr::opts_knit$set(root.dir = "C:/Users/samuel.gurr/Documents/Github_repositories/EAD-ASEB-Airradians_Popgen_OA/") # Sam's
 ```
 
@@ -60,6 +60,15 @@ resaz_48dpf_filenames
 
 # Predictibe phenomics temperature ramp at 1C per day with oyster seed 
 
+resaz_seed20C_filenames <- list.files("data/Pacific_oyster/resazurin/20260622_20/", pattern = "\\.xlsx$", full.names = TRUE)
+resaz_seed20C_filenames
+
+resaz_seed24C_filenames <- list.files("data/Pacific_oyster/resazurin/20260626_24/",  pattern = "\\.xlsx$", full.names = TRUE)
+resaz_seed24C_filenames
+
+resaz_seed26C_filenames <- list.files("data/Pacific_oyster/resazurin/20260628_26/",  pattern = "\\.xlsx$", full.names = TRUE)
+resaz_seed26C_filenames
+
 resaz_seed28C_filenames <- list.files("data/Pacific_oyster/resazurin/20260630_28/", pattern = "\\.xlsx$", full.names = TRUE)
 resaz_seed28C_filenames
 
@@ -97,6 +106,20 @@ xlsx_list_48dpf <- setNames(
              )
 
 # Predictibe phenomics temperature ramp at 1C per day with oyster seed 
+xlsx_list_seed20C <- setNames(
+                      lapply(resaz_seed20C_filenames, read_excel),
+                      str_remove(basename(resaz_seed20C_filenames), "\\.xlsx$")
+             )
+
+xlsx_list_seed24C <- setNames(
+                      lapply(resaz_seed24C_filenames, read_excel),
+                      str_remove(basename(resaz_seed24C_filenames), "\\.xlsx$")
+             )
+
+xlsx_list_seed26C <- setNames(
+                      lapply(resaz_seed26C_filenames, read_excel),
+                      str_remove(basename(resaz_seed26C_filenames), "\\.xlsx$")
+             )
 
 xlsx_list_seed28C <- setNames(
                       lapply(resaz_seed28C_filenames, read_excel),
@@ -152,7 +175,7 @@ covert_to_df_Gladys <- function (file_in) {
 }
 
 
-covert_to_df_Tecan_28C <- function (file_in) { # raw files for 28C are formatted differently than all the other, catering here to just these
+# covert_to_df_Tecan_28C <- function (file_in) { # raw files for 28C are formatted differently than all the other, catering here to just these
 
                           file_out <- as.data.frame(file_in[-c(9:39),]) %>% # call only the data in the files
                                         mutate(across(2:13, ~ suppressWarnings(as.integer(.)))) # convert to integer, bcus theres "Overflow" strings
@@ -347,7 +370,7 @@ for (i in 1:length(resaz_48dpf_filenames)) {
 rbind.df_48dpf <- rbind.df %>% # note, the names of the files differ from the previous time;oint, so made adjustments here
                     dplyr::mutate(Date = 20260504,
                                   Treatment = dplyr::case_when(
-                                                        grepl("26C", plate, ignore.case = TRUE) ~ "26C", # I assumed plates 1-4 are in line with temp, checl with Anna
+                                                        grepl("26C", plate, ignore.case = TRUE) ~ "26C",
                                                         grepl("30C", plate, ignore.case = TRUE) ~ "30C",
                                                         grepl("34C", plate, ignore.case = TRUE) ~ "34C",
                                                         grepl("38C", plate, ignore.case = TRUE) ~ "38C"),
@@ -391,15 +414,15 @@ write.csv(data_merged_48dpf,  "output/resazurin/raw/rawdf_48dpf.csv")
 
 ### Tecan data calling "covert_to_df_Tecan" to assemble dataframes in the loops below
 
-```{r seed at 28C convert to dataframe}
+```{r seed at 20C convert to dataframe}
 loop.df           <- data.frame(matrix(nrow = 1, ncol = 8)) # create dataframe to save cumunalitively during for loop
 colnames(loop.df) <- c('filename', 'time', 'timepoint', 'Plate_row', 'Plate_col', 'Well', 'plate', 'flourescence') # names for columns in the for loop
 rbind.df          <- data.frame() # start dataframe 
-for (i in 1:length(resaz_seed28C_filenames)) {
+for (i in 1:length(resaz_seed20C_filenames)) {
   
- x         <- (basename(resaz_seed28C_filenames[i]))
+ x         <- (basename(resaz_seed20C_filenames[i]))
  x.2       <- sub("\\.xlsx$", "", noquote(x))
- loop.df   <- covert_to_df_Tecan_28C(xlsx_list_seed28C[[x.2]])
+ loop.df   <- covert_to_df_Tecan(xlsx_list_seed20C[[x.2]])
  
  rbind.df <- rbind(rbind.df,
                      loop.df) #bind to a cumulative list dataframe
@@ -411,7 +434,247 @@ for (i in 1:length(resaz_seed28C_filenames)) {
 rbind.df <- rbind.df[!is.na(rbind.df$flourescence), ]
 nrow(rbind.df) # 499
 
-rbind.df_seed28C <- rbind.df %>% # note, the names of the files differ from the previous time;oint, so made adjustments here
+rbind.df_seed20C <- rbind.df %>% # note, the names of the files differ from the previous timepoint, so made adjustments here
+                    dplyr::mutate(Date = 20260622,
+                                  Treatment = "20C",
+                                  gain = dplyr::case_when(
+                                                        grepl("g85", plate, ignore.case = TRUE) ~ 85, # plate gains were manually set
+                                                        grepl("g82", plate, ignore.case = TRUE) ~ 82,
+                                                        grepl("g80", plate, ignore.case = TRUE) ~ 80,
+                                                        grepl("g78", plate, ignore.case = TRUE) ~ 78,
+                                                        grepl("g77", plate, ignore.case = TRUE) ~ 77),
+                                  PlateID = dplyr::case_when(
+                                                             grepl("20_T0", filename, fixed = TRUE) &
+                                                               grepl("g85",  filename, fixed = TRUE) ~ "T0_20C_85g",
+                                                             
+                                                             grepl("20_T1", filename, fixed = TRUE) &
+                                                               grepl("g85",  filename, fixed = TRUE) ~ "T1_20C_85g",
+                                                             
+                                                             grepl("20_T2", filename, fixed = TRUE) &
+                                                               grepl("g82",  filename, fixed = TRUE) ~ "T2_20C_82g",
+                                                             
+                                                             grepl("20_T3", filename, fixed = TRUE) &
+                                                               grepl("g80",  filename, fixed = TRUE) ~ "T3_20C_80g",
+                                                             
+                                                             grepl("20_T4", filename, fixed = TRUE) &
+                                                               grepl("g78",  filename, fixed = TRUE) ~ "T4_20C_78g",
+                                                             
+                                                             grepl("20_T5", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T5_20C_77g"))
+                                                            
+
+
+rbind.df_seed20C$Plate_col <- as.numeric(rbind.df_seed20C$Plate_col)
+data_merged_seed20C <- dplyr::left_join(rbind.df_seed20C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
+
+nrow(rbind.df_seed20C) == nrow(data_merged_seed20C) # MUST VE TRUE!!!!
+
+
+
+
+data_merged_seed20C <- data_merged_seed20C %>% 
+  dplyr::rename(PlateID = PlateID.x) %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "gain",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
+
+data_merged_seed20C_nodup <- data_merged_seed20C[!duplicated(data_merged_seed20C), ] 
+```
+
+```{r seed at 20C output}
+write.csv(data_merged_seed20C_nodup,  "output/resazurin/raw/rawdf_20260622_20C.csv")
+```
+
+
+```{r seed at 24C convert to dataframe}
+loop.df           <- data.frame(matrix(nrow = 1, ncol = 8)) # create dataframe to save cumunalitively during for loop
+colnames(loop.df) <- c('filename', 'time', 'timepoint', 'Plate_row', 'Plate_col', 'Well', 'plate', 'flourescence') # names for columns in the for loop
+rbind.df          <- data.frame() # start dataframe 
+for (i in 1:length(resaz_seed24C_filenames)) {
+  
+ x         <- (basename(resaz_seed24C_filenames[i]))
+ x.2       <- sub("\\.xlsx$", "", noquote(x))
+ loop.df   <- covert_to_df_Tecan(xlsx_list_seed24C[[x.2]])
+ 
+ rbind.df <- rbind(rbind.df,
+                     loop.df) #bind to a cumulative list dataframe
+ print(rbind.df) # print to monitor progress
+  
+}
+
+# omit rows where flourescnece is NA (nore: this is in all rows 'H')
+rbind.df <- rbind.df[!is.na(rbind.df$flourescence), ]
+nrow(rbind.df) # 499
+
+rbind.df_seed24C <- rbind.df %>% # note, the names of the files differ from the previous timepoint, so made adjustments here
+                    dplyr::mutate(Date = 20260626,
+                                  Treatment = "24C",
+                                  gain = dplyr::case_when(
+                                                        grepl("g77", plate, ignore.case = TRUE) ~ 77), 
+                                  PlateID = dplyr::case_when(
+                                                             grepl("24_T0", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T0_24C_77g",
+                                                             
+                                                             grepl("24_T1", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T1_24C_77g",
+                                                             
+                                                             grepl("24_T2", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T2_24C_77g",
+                                                             
+                                                             grepl("24_T3", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T3_24C_77g",
+                                                             
+                                                             grepl("24_T4", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T4_24C_77g",
+                                                             
+                                                             grepl("24_T5", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T5_24C_77g"))
+                                                            
+
+
+rbind.df_seed24C$Plate_col <- as.numeric(rbind.df_seed24C$Plate_col)
+data_merged_seed24C <- dplyr::left_join(rbind.df_seed24C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
+
+nrow(rbind.df_seed24C) == nrow(data_merged_seed24C) # MUST VE TRUE!!!!
+
+
+
+
+data_merged_seed24C <- data_merged_seed24C %>% 
+  dplyr::rename(PlateID = PlateID.x) %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "gain",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
+```
+
+```{r seed at 24C output}
+write.csv(data_merged_seed24C,  "output/resazurin/raw/rawdf_20260626_24C.csv")
+```
+
+
+```{r seed at 26C convert to dataframe}
+loop.df           <- data.frame(matrix(nrow = 1, ncol = 8)) # create dataframe to save cumunalitively during for loop
+colnames(loop.df) <- c('filename', 'time', 'timepoint', 'Plate_row', 'Plate_col', 'Well', 'plate', 'flourescence') # names for columns in the for loop
+rbind.df          <- data.frame() # start dataframe 
+for (i in 1:length(resaz_seed26C_filenames)) {
+  
+ x         <- (basename(resaz_seed26C_filenames[i]))
+ x.2       <- sub("\\.xlsx$", "", noquote(x))
+ loop.df   <- covert_to_df_Tecan(xlsx_list_seed26C[[x.2]])
+ 
+ rbind.df <- rbind(rbind.df,
+                     loop.df) #bind to a cumulative list dataframe
+ print(rbind.df) # print to monitor progress
+  
+}
+
+# omit rows where flourescnece is NA (nore: this is in all rows 'H')
+rbind.df <- rbind.df[!is.na(rbind.df$flourescence), ]
+nrow(rbind.df) # 499
+
+rbind.df_seed26C <- rbind.df %>% # note, the names of the files differ from the previous timepoint, so made adjustments here
+                    dplyr::mutate(Date = 20260628,
+                                  Treatment = "26C",
+                                  gain = dplyr::case_when(
+                                                        grepl("g77", plate, ignore.case = TRUE) ~ 77), 
+                                  PlateID = dplyr::case_when(
+                                                             grepl("26_T0", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T0_26C_77g",
+                                                             
+                                                             grepl("26_T1", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T1_26C_77g",
+                                                             
+                                                             grepl("26_T2", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T2_26C_77g",
+                                                             
+                                                             grepl("26_T3", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T3_26C_77g",
+                                                             
+                                                             grepl("26_T4", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T4_26C_77g",
+                                                             
+                                                             grepl("26_T5", filename, fixed = TRUE) &
+                                                               grepl("g77",  filename, fixed = TRUE) ~ "T5_26C_77g"))
+                                                            
+
+
+rbind.df_seed26C$Plate_col <- as.numeric(rbind.df_seed26C$Plate_col)
+data_merged_seed26C <- dplyr::left_join(rbind.df_seed26C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
+
+nrow(rbind.df_seed26C) == nrow(data_merged_seed26C) # MUST VE TRUE!!!!
+
+
+
+
+data_merged_seed26C <- data_merged_seed26C %>% 
+  dplyr::rename(PlateID = PlateID.x) %>% 
+  dplyr::select("Date",
+                "filename",
+                "time",
+                "timepoint",
+                "Treatment",
+                "PlateID",
+                "Well",
+                "gain",
+                "Type",
+                "Family",
+                "Age",
+                "Area_ImageJ",
+                "Count",
+                "flourescence",
+                "Note")
+```
+
+```{r seed at 26C output}
+write.csv(data_merged_seed26C,  "output/resazurin/raw/rawdf_20260628_26C.csv")
+```
+
+
+```{r seed at 28C convert to dataframe}
+loop.df           <- data.frame(matrix(nrow = 1, ncol = 8)) # create dataframe to save cumunalitively during for loop
+colnames(loop.df) <- c('filename', 'time', 'timepoint', 'Plate_row', 'Plate_col', 'Well', 'plate', 'flourescence') # names for columns in the for loop
+rbind.df          <- data.frame() # start dataframe 
+for (i in 1:length(resaz_seed28C_filenames)) {
+  
+ x         <- (basename(resaz_seed28C_filenames[i]))
+ x.2       <- sub("\\.xlsx$", "", noquote(x))
+ loop.df   <- covert_to_df_Tecan(xlsx_list_seed28C[[x.2]])
+ 
+ rbind.df <- rbind(rbind.df,
+                     loop.df) #bind to a cumulative list dataframe
+ print(rbind.df) # print to monitor progress
+  
+}
+
+# omit rows where flourescnece is NA (nore: this is in all rows 'H')
+rbind.df <- rbind.df[!is.na(rbind.df$flourescence), ]
+nrow(rbind.df) # 499
+
+rbind.df_seed28C <- rbind.df %>% # note, the names of the files differ from the previous timepoint, so made adjustments here
                     dplyr::mutate(Date = 20260630,
                                   Treatment = "28C",
                                   gain = dplyr::case_when(
@@ -596,8 +859,8 @@ rbind.df_seed32C <- rbind.df %>% # note, the names of the files differ from the 
                                                         grepl("g65", plate, ignore.case = TRUE) ~ 65)) # plates were manually set to a gain at 65 and 70 for all runs
 
 
-# metadata not yet ready!
-# data_merged_seed34C <- dplyr::left_join(rbind.df_seed34C, <INSERT METADATA>, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
+rbind.df_seed32C$Plate_col <- as.numeric(rbind.df_seed32C$Plate_col)
+data_merged_seed32C <- dplyr::left_join(rbind.df_seed32C, metadata_counts, by=c('Date','PlateID', 'Well', 'Plate_row', 'Treatment'))
 
 rbind.df_seed32C$Plate_col <- as.numeric(rbind.df_seed32C$Plate_col)
 data_merged_seed32C <- dplyr::left_join(rbind.df_seed32C,metadata_counts, by=c('Date', 'Well', 'Plate_col', 'Plate_row', 'Treatment'))
@@ -625,7 +888,6 @@ data_merged_seed32C <- data_merged_seed32C %>%
 ```{r seed at 32C output}
 write.csv(data_merged_seed32C,  "output/resazurin/raw/rawdf_20260704_32C.csv")
 ```
-
 
 
 
@@ -751,8 +1013,7 @@ rbind.df_seed38C <- rbind.df %>% # note, the names of the files differ from the 
                     dplyr::mutate(Date = 20260710,
                                   Treatment = "38C",
                                   gain = dplyr::case_when(
-                                                        grepl("g60", plate, ignore.case = TRUE) ~ 60, # plates were manually set to a gain at 65 and 70 for all runs
-                                                        grepl("g65", plate, ignore.case = TRUE) ~ 65))
+                                                        grepl("g60", plate, ignore.case = TRUE) ~ 60))
 
 
 rbind.df_seed38C$Plate_col <- as.numeric(rbind.df_seed38C$Plate_col)
@@ -783,9 +1044,9 @@ data_merged_seed38C <- data_merged_seed38C %>%
                 "flourescence",
                 "Note")
              
-                                          
+data_merged_seed38C_nodup <- data_merged_seed38C[!duplicated(data_merged_seed38C), ]                                         
 ```
 
 ```{r seed at 38C output}
-write.csv(data_merged_seed38C,  "output/resazurin/raw/rawdf_20260710_38C.csv")
+write.csv(data_merged_seed38C_nodup,  "output/resazurin/raw/rawdf_20260710_38C.csv")
 ```
