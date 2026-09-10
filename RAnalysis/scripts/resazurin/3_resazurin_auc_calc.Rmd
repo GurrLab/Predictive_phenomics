@@ -340,13 +340,14 @@ ggplot(data = AUC_calculate_20260710_38C$DeltaFlo.df,
 
 
 
-## Clean up data 
+## Clean up data, Plot, Run Stats
 
 
 #### 72 hpf data 
   * temperatures 26 and 32 (only 2!)
   * normalized by count (# of individuals counted per well, fixed in formalin)
-  * true blanks are instances where 'Sample' Count == 0, ignore 'Blank' for "Type" column (only here!)
+  * true blanks are denoted as 'Blank' in the "Type" column
+  * CONCLUSION: Sig effect at 32C showing reduced metabolic activity for low EBV families (77% lower than High EBVs)
 ```{r 72 hpf clean}
 
 # dataset == AUC_calculate_72hpf
@@ -417,6 +418,11 @@ AUC_calculate_72hpf <- merge(AUC_calculate_72hpf.Samples, MeanBlanks_72hpf, by =
   
 nrow(AUC_calculate_72hpf)
 nrow(AUC_calculate_72hpf.Samples)
+
+
+```
+
+```{r 72 hpf clean plotting}
 # PLOTTING ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # AUC corrected adn normalized, all data by family and treatment
 ggplot(AUC_calculate_72hpf, aes(x = as.factor(Family), y = AUC.cor.norm)) + 
@@ -589,6 +595,7 @@ Plot_72hpf_MEAN.SE <- ggplot(
                               colour = "black",
                               position = position_dodge(width = dodge_width)
                             ) +
+                            scale_colour_manual(values = c('#0072B2', '#E69F00')) +
                             labs(
                               title = "72 hpf",
                               x = "Temperature treatment",
@@ -603,13 +610,10 @@ Plot_72hpf_MEAN.SE <- ggplot(
 
 ```
 
-
-
-
 ```{r stats for 72 hpf}
 
-# run two modefls one for 26C and one for 32 C
-
+# prepare subset to run t tests within temperature
+unique(AUC_calculate_72hpfMEANS$Treatment) # "26C" "32C"
 AUC_calculate_72hpfMEANS_26C <- AUC_calculate_72hpfMEANS %>% 
                                       dplyr::filter(Treatment %in% '26C') %>% 
                                       dplyr::mutate(
@@ -618,16 +622,6 @@ AUC_calculate_72hpfMEANS_26C <- AUC_calculate_72hpfMEANS %>%
                                                   Family_EBV %in% 'High' ~ 2,
                                                   )
                                       )
-# check for normality 
-by(AUC_calculate_72hpfMEANS_26C$meanAUC.cor.norm, AUC_calculate_72hpfMEANS_26C$Family_EBV, shapiro.test) # 0.5897 - normal
-car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_72hpfMEANS_26C) # 0.7377 - can not assume homogeneity of variance 
-# data are both normal and have homogeneity of varianbce - proced with students t test
-t.test(AUC_calculate_72hpfMEANS_26C$Family_EBV_num,
-       AUC_calculate_72hpfMEANS_26C$meanAUC.cor.norm) # 0.1828 not significant
-
-
-
-
 
 AUC_calculate_72hpfMEANS_32C <- AUC_calculate_72hpfMEANS %>% 
                                       dplyr::filter(Treatment %in% '32C') %>% 
@@ -637,18 +631,26 @@ AUC_calculate_72hpfMEANS_32C <- AUC_calculate_72hpfMEANS %>%
                                                   Family_EBV %in% 'High' ~ 2,
                                                   )
                                       )
+# MODEL ASSUMPTIONS for t test
+# shapiro wilk to check for normality 
+by(AUC_calculate_72hpfMEANS_26C$meanAUC.cor.norm, AUC_calculate_72hpfMEANS_26C$Family_EBV, shapiro.test) # 0.5897 - normal
+by(AUC_calculate_72hpfMEANS_32C$meanAUC.cor.norm, AUC_calculate_72hpfMEANS_32C$Family_EBV, shapiro.test) # 0.2207 - normal
 
+# levenes test to check for homogeneity of variance 
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_72hpfMEANS_26C) # 0.7377 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_72hpfMEANS_32C) # 0.04428 - fail
 
-t.test(AUC_calculate_72hpfMEANS_32C$Family_EBV_num,
-       AUC_calculate_72hpfMEANS_32C$meanAUC.cor.norm)
+# conclusion
+# run the Welch's t test for 26C, run the non parametric Wilcox rnak sum for 32C
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_72hpfMEANS_26C, var.equal = FALSE) # 0.6151 not significant
+wilcox.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_72hpfMEANS_32C) # 0.008658
 
-# two assumptions - normality of data (or residuals) and homogeneity of variance 
-# shapiro wilk for normalityu and levenes test for homogeneity of variance 
-by(AUC_calculate_72hpfMEANS$meanAUC.cor.norm, AUC_calculate_72hpfMEANS$Family_EBV, shapiro.test) # 0.001365 - non normal
-car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_72hpfMEANS_32C) # 0.04428 * - can not assume homogeneity of variance 
-# can not use t test becuase data do not abide by model assumptions 
-# Wilcox rank sum tewst
-wilcox.test(meanAUC.cor.norm ~ Family_EBV_num, data = AUC_calculate_72hpfMEANS_32C) # 0.008658
+# run follow up of sig effect
+AUC_calculate_72hpfMEANS_32C %>% dplyr::group_by(Family_EBV) %>%  dplyr::summarise(mean = mean(meanAUC.cor.norm))
+# High	12.914278			
+# Low	  2.942732
+((12.914278-2.942732)/12.914278)*100 # 77% lower metabolic activity on average for the low EBV than High EBV fams
+
 ```
 
 
@@ -656,6 +658,7 @@ wilcox.test(meanAUC.cor.norm ~ Family_EBV_num, data = AUC_calculate_72hpfMEANS_3
   * temperatures 26, 30, 34, and 38C
   * normalized by count (# of individuals counted per well, fixed in formalin)
   * true blanks are denoted as 'Blank' in the "Type" column
+  * CONCLUSION: No effect
 ```{r 15 dpf clean}
 
 # dataset == AUC_calculate_15dpf
@@ -901,6 +904,7 @@ Plot_15dpf_MEAN.SE <- ggplot(
                               colour = "black",
                               position = position_dodge(width = dodge_width)
                             ) +
+                            scale_colour_manual(values = c('#0072B2', '#E69F00')) +
                             labs(
                               title = "15 dpf",
                               x = "Temperature treatment",
@@ -913,11 +917,72 @@ Plot_15dpf_MEAN.SE <- ggplot(
 
 ```
 
+```{r stats for 15 dpf}
+
+#  T TEST ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# test for differences between  high and low EBV families WITHIN each temperature incubation
+
+# prepare subset to run t tests within temperature
+unique(AUC_calculate_15dpfMEANS$Treatment) # "26C" "30C" "34C" "38C"
+AUC_calculate_15dpfMEANS_26C <- AUC_calculate_15dpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '26C') 
+                                      
+AUC_calculate_15dpfMEANS_30C <- AUC_calculate_15dpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '30C')
+
+AUC_calculate_15dpfMEANS_34C <- AUC_calculate_15dpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '34C') 
+
+AUC_calculate_15dpfMEANS_38C <- AUC_calculate_15dpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '38C')
+
+# MODEL ASSUMPTIONS for t test
+# shapiro wilk to check for normality 
+by(AUC_calculate_15dpfMEANS_26C$meanAUC.cor.norm, AUC_calculate_15dpfMEANS_26C$Family_EBV, shapiro.test) # 0.1179 - normal
+by(AUC_calculate_15dpfMEANS_30C$meanAUC.cor.norm, AUC_calculate_15dpfMEANS_30C$Family_EBV, shapiro.test) # 0.5064 - normal
+by(AUC_calculate_15dpfMEANS_34C$meanAUC.cor.norm, AUC_calculate_15dpfMEANS_34C$Family_EBV, shapiro.test) # 0.727 - normal
+by(AUC_calculate_15dpfMEANS_38C$meanAUC.cor.norm, AUC_calculate_15dpfMEANS_38C$Family_EBV, shapiro.test) # 0.09452 - normal
+
+# levenes test to check for homogeneity of variance 
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_15dpfMEANS_26C) # 0.8619 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_15dpfMEANS_30C) # 0.7986 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_15dpfMEANS_34C) # 0.8392 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_15dpfMEANS_38C) # 0.5776 - pass
+
+# conclusion
+# all models for the four temperatures pass! Move forward with t test
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_15dpfMEANS_26C, var.equal = FALSE) # 0.5054 not significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_15dpfMEANS_30C, var.equal = FALSE) # 0.6647 not significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_15dpfMEANS_34C, var.equal = FALSE) # 0.9376 not significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_15dpfMEANS_38C, var.equal = FALSE) # 0.2013 not significant
+
+
+#  TWO WAY ANOVA  ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# run two way anpva for EBV * temperature
+
+TwoWayANOVA_15dpf <- aov(lm(meanAUC.cor.norm ~ Family_EBV*Treatment, data = AUC_calculate_15dpfMEANS))
+# check model assumptions 
+shapiro.test(resid(TwoWayANOVA_15dpf)) # 0.03088 - fail 
+car::leveneTest(TwoWayANOVA_15dpf) # 0.9421 - pass
+# homogeneity of variance failed, run the non parametric Shrier Ray Hare 
+rcompanion::scheirerRayHare(
+                            meanAUC.cor.norm ~ Family_EBV * Treatment,
+                            data = AUC_calculate_15dpfMEANS
+                          ) # no significant differences
+#                      Df Sum Sq      H p.value
+# Family_EBV            1    5.3 0.0272 0.86898
+# Treatment             3  775.5 3.9566 0.26619
+# Family_EBV:Treatment  3  332.2 1.6947 0.63811
+# Residuals            40 8099.0  
+```
+
 
 #### 48 dpf data 
   * temperatures 26, 30, 34, and 38C
-  * normalized by count (# of individuals counted per well, fixed in formalin)
+  * normalized by shell area measured in ImageJ
   * true blanks are denoted as 'Blank' in the "Type" column
+  * CONCLUSION: Overall sig effect (two way anova) showing reduced metabolic activity for low EBV families (40% lower than High EBVs)
+                Sig effects of EBV at 26C and 38 (Welch's t test), showing 65% lower at 26C and 50% lower at 38C for low EBV fams than High EBV fams
 ```{r 48 dpf clean}
 # dataset == AUC_calculate_48dpf
 unique((AUC_calculate_48dpf$AUC.df)$Treatment)
@@ -1126,8 +1191,8 @@ dodge_width <- 0.70
 
 
 
-AUC_calculate_48dpf$Family_EBV <- factor(
-  AUC_calculate_48dpf$Family_EBV,
+AUC_calculate_48dpfMEANS$Family_EBV <- factor(
+  AUC_calculate_48dpfMEANS$Family_EBV,
   levels = c("Low", "High")
 )
       
@@ -1168,6 +1233,7 @@ Plot_48dpf_MEAN.SE <- ggplot(
                               colour = "black",
                               position = position_dodge(width = dodge_width)
                             ) +
+                            scale_colour_manual(values = c('#0072B2', '#E69F00')) +
                             labs(
                               title = "48 dpf",
                               x = "Temperature treatment",
@@ -1179,6 +1245,86 @@ Plot_48dpf_MEAN.SE <- ggplot(
                             theme(legend.position = "none") 
 ```
 
+```{r stats for 48 dpf}
+
+#  T TEST ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# test for differences between  high and low EBV families WITHIN each temperature incubation
+
+# prepare subset to run t tests within temperature
+unique(AUC_calculate_48dpfMEANS$Treatment) # "26C" "30C" "34C" "38C"
+AUC_calculate_48dpfMEANS_26C <- AUC_calculate_48dpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '26C') 
+                                      
+AUC_calculate_48dpfMEANS_30C <- AUC_calculate_48dpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '30C')
+
+AUC_calculate_48dpfMEANS_34C <- AUC_calculate_48dpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '34C') 
+
+AUC_calculate_48dpfMEANS_38C <- AUC_calculate_48dpfMEANS %>% 
+                                      dplyr::filter(Treatment %in% '38C')
+
+# MODEL ASSUMPTIONS for t test
+# shapiro wilk to check for normality 
+by(AUC_calculate_48dpfMEANS_26C$meanAUC.cor.norm, AUC_calculate_48dpfMEANS_26C$Family_EBV, shapiro.test) # 0.2368 - normal
+by(AUC_calculate_48dpfMEANS_30C$meanAUC.cor.norm, AUC_calculate_48dpfMEANS_30C$Family_EBV, shapiro.test) # 0.4337 - normal
+by(AUC_calculate_48dpfMEANS_34C$meanAUC.cor.norm, AUC_calculate_48dpfMEANS_34C$Family_EBV, shapiro.test) # 0.1136 - normal
+by(AUC_calculate_48dpfMEANS_38C$meanAUC.cor.norm, AUC_calculate_48dpfMEANS_38C$Family_EBV, shapiro.test) # 0.5243 - normal
+
+# levenes test to check for homogeneity of variance 
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_48dpfMEANS_26C) # 0.06179 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_48dpfMEANS_30C) # 0.931 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_48dpfMEANS_34C) # 0.8691 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_48dpfMEANS_38C) # 0.2721 - pass
+
+# conclusion
+# all models for the four temperatures pass! Move forward with t test
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_48dpfMEANS_26C, var.equal = FALSE) # 0.03899  significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_48dpfMEANS_30C, var.equal = FALSE) # 0.7285 not significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_48dpfMEANS_34C, var.equal = FALSE) # 0.126 not significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = AUC_calculate_48dpfMEANS_38C, var.equal = FALSE) # 0.01043  significant
+
+#26C followup
+AUC_calculate_48dpfMEANS_26C %>% dplyr::group_by(Family_EBV) %>%  dplyr::summarise(mean = mean(meanAUC.cor.norm))
+# High	586.6778			
+# Low	  202.7337	
+((586.6778-202.7337)/586.6778)*100 # 65% lower metabolic activity on average for the low EBV than High EBV fams
+
+
+#38C followup
+AUC_calculate_48dpfMEANS_38C %>% dplyr::group_by(Family_EBV) %>%  dplyr::summarise(mean = mean(meanAUC.cor.norm))
+# High	562.0305			
+# Low	  281.1019	
+((562.0305-281.1019)/562.0305)*100 # 50% lower metabolic activity on average for the low EBV than High EBV fams
+
+
+
+#  TWO WAY ANOVA  ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# run two way anpva for EBV * temperature
+
+TwoWayANOVA_48dpf <- aov(lm(meanAUC.cor.norm ~ Family_EBV*Treatment, data = AUC_calculate_48dpfMEANS))
+# check model assumptions 
+shapiro.test(resid(TwoWayANOVA_48dpf)) # 0.9866 - pass 
+car::leveneTest(TwoWayANOVA_48dpf) # 0.06266 - pass
+# conclusion, pass run ANOVA summary 
+summary(TwoWayANOVA_48dpf) # significant effect of EBV
+#                      Df  Sum Sq Mean Sq F value  Pr(>F)   
+# Family_EBV            1  583380  583380  12.524 0.00104 **
+# Treatment             3   59315   19772   0.424 0.73651   
+# Family_EBV:Treatment  3  291463   97154   2.086 0.11737   
+# Residuals            40 1863229   46581 
+
+AUC_calculate_48dpfMEANS %>% dplyr::group_by(Family_EBV) %>%  dplyr::summarise(mean = mean(meanAUC.cor.norm))
+# High	551.2879			
+# Low	  330.7999
+((551.2879-330.7999)/551.2879)*100 # 40% low metabolic activity on average for the low EBV than High EBV fams
+```
+
+
+#### Outputs 
+* Plot 
+* master file for 72h, 15d, and 48d
+
 ```{r Output CalculatedAUC larvae and early seed}
 
 Master_larvae_seed <- rbind(AUC_calculate_72hpf,
@@ -1186,28 +1332,20 @@ Master_larvae_seed <- rbind(AUC_calculate_72hpf,
                             AUC_calculate_48dpf)
 
 
+write.csv(Master_larvae_seed, "output/resazurin/calculated/CalulatedAUC_Master_larvae_earlyseed.csv")
+
+```
+
+```{r Output Resaz_larval_juvenile_MEANse Plot}
+
 Resaz_larval_juvenile_MEANse <- ggpubr::ggarrange(Plot_72hpf_MEAN.SE,
                                                   Plot_15dpf_MEAN.SE,
                                                   Plot_48dpf_MEAN.SE,
                                                   nrow=3)
 
-write.csv(Master_larvae_seed, "output/resazurin/calculated/CalulatedAUC_Master_larvae_earlyseed.csv")
-
-
-pdf("output/resazurin/Resaz_larval_juvenile_MEANse.pdf", width = 5, height = 15)
+pdf("output/resazurin/Resaz_larval_juvenile_MEANse.pdf", width = 5, height = 12)
 Resaz_larval_juvenile_MEANse
 dev.off()
-
-```
-
-```{r}
-
-ggarrange(
-  AUC_calculate_15dpf.PLOT3a,AUC_calculate_15dpf.PLOT3b,
-  AUC_calculate_48dpf.PLOT3a, AUC_calculate_48dpf.PLOT3b,
-  nrow=2,
-  ncol=2
-)
 
 ```
 
@@ -1225,7 +1363,7 @@ ADJUSTING FOR GAIN, NORMALIZE TO 65
           AUC * 0.095 for every 1 unit decrease in gain
           
           
-```{r}
+```{r TempRamp clean and parse}
 
 0.095*(77-65)
 AUC_calculate_20260702_28C.FINAL <-AUC_calculate_20260630_28C$AUC.df %>% 
@@ -1235,23 +1373,23 @@ AUC_calculate_20260702_28C.FINAL <-AUC_calculate_20260630_28C$AUC.df %>%
             )
                           
 AUC_calculate_20260702_30C.FINAL <- merge(AUC_calculate_20260702_30C$AUC.df,
-                                    (as.data.frame(AUC_calculate_20260702_30C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') %>% dplyr::select('gain', 'meanAUC')),
-                                    by = 'gain') %>% 
+                                    (as.data.frame(AUC_calculate_20260702_30C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') 
+                                     %>% dplyr::select('gain', 'meanAUC')),by = 'gain') %>% 
                                           dplyr::rename(AUC.BlankShell = meanAUC) %>% 
                                           dplyr::mutate(AUC.cor = AUC - AUC.BlankShell) %>% 
                                           dplyr::filter(gain == 65)
                                   
                      
 AUC_calculate_20260704_32C.FINAL <- merge(AUC_calculate_20260704_32C$AUC.df,
-                                    (as.data.frame(AUC_calculate_20260704_32C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') %>% dplyr::select('gain', 'meanAUC')),
-                                    by = 'gain') %>% 
+                                    (as.data.frame(AUC_calculate_20260704_32C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') 
+                                     %>% dplyr::select('gain', 'meanAUC')), by = 'gain') %>% 
                                           dplyr::rename(AUC.BlankShell = meanAUC) %>% 
                                           dplyr::mutate(AUC.cor = AUC - AUC.BlankShell)
 
 
 AUC_calculate_20260706_34C.FINAL <- merge(AUC_calculate_20260706_34C$AUC.df,
-                                    (as.data.frame(AUC_calculate_20260706_34C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') %>% dplyr::select('gain', 'meanAUC')),
-                                    by = 'gain') %>% 
+                                    (as.data.frame(AUC_calculate_20260706_34C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') 
+                                     %>% dplyr::select('gain', 'meanAUC')), by = 'gain') %>% 
                                           dplyr::rename(AUC.BlankShell = meanAUC) %>% 
                                           dplyr::mutate(AUC.cor = AUC - AUC.BlankShell) %>% 
                                           dplyr::filter(gain == 65)
@@ -1260,31 +1398,36 @@ AUC_calculate_20260706_34C.FINAL <- merge(AUC_calculate_20260706_34C$AUC.df,
 
 0.145 * (65-60)
 AUC_calculate_20260710_38C.FINAL <- merge(AUC_calculate_20260710_38C$AUC.df,
-                                    (as.data.frame(AUC_calculate_20260710_38C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') %>% dplyr::select('gain', 'meanAUC')),
-                                    by = 'gain') %>% 
+                                    (as.data.frame(AUC_calculate_20260710_38C$AUCblanks) %>% dplyr::filter(Type %in% 'shell') 
+                                     %>% dplyr::select('gain', 'meanAUC')), by = 'gain') %>% 
                                           dplyr::rename(AUC.BlankShell = meanAUC) %>% 
                                           dplyr::mutate(AUC.cor = (AUC - AUC.BlankShell)*1.725) # convert to 65 gain
 
 
 ```
 
-```{r  Output CalculatedAUC juvenile TempRamp}
-Master <- rbind(AUC_calculate_20260702_30C.FINAL,
-      AUC_calculate_20260704_32C.FINAL,
-      AUC_calculate_20260706_34C.FINAL,
-      AUC_calculate_20260710_38C.FINAL)
+```{r TempRamp output CalculatedAUC}
+Master_TempRamp <- rbind(AUC_calculate_20260702_30C.FINAL,
+                         AUC_calculate_20260704_32C.FINAL,
+                         AUC_calculate_20260706_34C.FINAL,
+                         AUC_calculate_20260710_38C.FINAL) %>% 
+                  dplyr::mutate(Family_EBV = 
+                                  dplyr::case_when(Family > 35 ~ 'Low',
+                                                   Family < 35 ~ 'High')
+                                            )
+nrow(Master_TempRamp)
+TempRamp_metadata <- metadata_counts %>% dplyr::select(Treatment, Family, Well, Age, Dry.Weight)
 
-write.csv(Master, "output/resazurin/calculated/CalulatedAUC_Master_TempRamp.csv")
-
-
+Master_TempRamp_merged <- merge(Master_TempRamp,TempRamp_metadata ) %>% 
+                                         dplyr::mutate(AUC.cor.norm = AUC.cor / Dry.Weight)
+write.csv(Master_TempRamp_merged, "output/resazurin/calculated/CalulatedAUC_Master_TempRamp.csv")
 
 ```
 
-
-```{r plotting juvenile TempRamp}
-Master_meansFamily <- Master %>% 
+```{r TempRamp plotting}
+Master_meansFamily <- Master_merged %>% 
                         dplyr::group_by(Date, Treatment, Family, Age) %>% 
-                        dplyr::summarise(meanAUC = mean(AUC.cor)) %>% 
+                        dplyr::summarise(meanAUC = mean(AUC.cor.norm)) %>% 
                         dplyr::mutate(Family_EBV = dplyr::case_when(Family >= 48 ~ 'Low',
                                                                     Family <= 20 ~ 'High'))
 
@@ -1326,10 +1469,6 @@ ggplot(data = Master_meansFamily,
  
  
  
-
-AUC_calculate_48dpfMEANS <- AUC_calculate_48dpf %>% group_by(Family, Treatment, Family_EBV) %>% dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm))
-
-
 
 dodge_width <- 0.70
 
@@ -1386,74 +1525,124 @@ TempRamp_MEAN.SE <- ggplot(
                               fill = "Independent variable 2"
                             ) +
                             geom_smooth(method = "loess",               
-                                                se = TRUE,                      
+                                                se = FALSE,                      
                                                 level = 0.95,
                                                 span = 0.8)  +
                             theme_classic() +
                             theme(legend.position = "none")
 ```
 
+```{r Output Resaz_TempRamp_MEANse Plot}
 
-```{r stats by family juvenile TempRamp}
-
-AOV30C.Family <- aov(
-                      lm(
-                        AUC.cor ~ Family,
-                         data = (Master %>% dplyr::filter(Treatment %in% "30C"))))
-shapiro.test(resid(AOV30C.Family)) # 0.003699 - N.S,
-kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "30C"))) # 0.007907 - significant
-
-AOV32C.Family <- aov(
-                      lm(
-                        AUC.cor ~ Family,
-                         data = (Master %>% dplyr::filter(Treatment %in% "32C"))))
-shapiro.test(resid(AOV32C.Family)) # 0.02742 - N.S,
-kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "32C"))) # 0.04516 - significant
-
-AOV34C.Family <- aov(
-                      lm(
-                        AUC.cor ~ Family,
-                         data = (Master %>% dplyr::filter(Treatment %in% "34C"))))
-shapiro.test(resid(AOV34C.Family)) # 0.004611 - N.S,
-kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "34C"))) # 0.003453 - significant
-
-
-AOV38C.Family <- aov(
-                      lm(
-                        AUC.cor ~ Family,
-                         data = (Master %>% dplyr::filter(Treatment %in% "38C"))))
-shapiro.test(resid(AOV38C.Family)) # 0.008765 - N.S,
-kruskal.test(AUC.cor ~ Family,data = (Master %>% dplyr::filter(Treatment %in% "38C"))) # 0.1768 - NOT SIGNIFICANT
+pdf("output/resazurin/Resaz_TempRamp_MEANse.pdf", width = 6, height = 5)
+TempRamp_MEAN.SE
+dev.off()
 
 ```
 
-```{r stats by high low EBV groups juvenile TempRamp}
+* CONCLUSION: Sig effect at 38C (welch's t test) showing 29% lower metabolic activity for High EBV fams than Low EBV fams
+              Sig effect of temperature (two way anova) showing 45% lower metabolic activity at 32C than at 38C for all animals measured
+```{r stats for Tempramp}
 
-AOV30C.highvlow <- aov(
-                      lm(
-                        meanAUC ~ Family_EBV,
-                         data = (Master_meansFamily %>% dplyr::filter(Treatment %in% "30C"))))
-shapiro.test(resid(AOV30C.highvlow)) # 0.4541
-summary(AOV30C.highvlow) # 0.0727 .
+#  T TEST ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# test for differences between  high and low EBV families WITHIN each temperature incubation
 
-AOV32C.highvlow <- aov(
-                      lm(
-                        meanAUC ~ Family_EBV,
-                         data = (Master_meansFamily %>% dplyr::filter(Treatment %in% "32C"))))
-shapiro.test(resid(AOV32C.highvlow)) # 0.09189
-summary(AOV32C.highvlow) # 0.00217 **.
+# prepare subset to run t tests within temperature
+unique(Master_TempRamp_merged$Treatment) # "30C" "32C" "34C" "38C"
+TempRamp_MEANS_30C <- Master_TempRamp_merged %>% 
+                                      dplyr::filter(Treatment %in% '30C') %>% 
+                                      dplyr::group_by(Family, Family_EBV) %>% 
+                                      dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm, na.rm = TRUE)) %>% 
+                                      dplyr::filter(meanAUC.cor.norm > 0) %>% # omit negatives
+                                      na.omit() # omit NAs (those ith no dry weights)
+                                      
+TempRamp_MEANS_32C <- Master_TempRamp_merged %>% 
+                                      dplyr::filter(Treatment %in% '32C') %>% 
+                                      dplyr::group_by(Family, Family_EBV) %>% 
+                                      dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm, na.rm = TRUE))%>% 
+                                      dplyr::filter(meanAUC.cor.norm > 0) %>% # omit negatives
+                                      na.omit() # omit NAs (those ith no dry weights)
 
-AOV34C.highvlow <- aov(
-                      lm(
-                        meanAUC ~ Family_EBV,
-                         data = (Master_meansFamily %>% dplyr::filter(Treatment %in% "34C"))))
-shapiro.test(resid(AOV34C.highvlow)) # 0.2049
-summary(AOV34C.highvlow) # 0.144
+TempRamp_MEANS_34C <- Master_TempRamp_merged %>% 
+                                      dplyr::filter(Treatment %in% '34C') %>% 
+                                      dplyr::group_by(Family, Family_EBV) %>% 
+                                      dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm, na.rm = TRUE))%>% 
+                                      dplyr::filter(meanAUC.cor.norm > 0) %>% # omit negatives
+                                      na.omit() # omit NAs (those ith no dry weights)
 
-AOV38C.highvlow <- aov(
-                      lm(
-                        meanAUC ~ Family_EBV,
-                         data = (Master_meansFamily %>% dplyr::filter(Treatment %in% "38C"))))
-shapiro.test(resid(AOV38C.highvlow)) # 0.3482
-summary(AOV38C.highvlow) # 0.845
+TempRamp_MEANS_38C <- Master_TempRamp_merged %>% 
+                                      dplyr::filter(Treatment %in% '38C') %>% 
+                                      dplyr::group_by(Family, Family_EBV) %>% 
+                                      dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm, na.rm = TRUE))%>% 
+                                      dplyr::filter(meanAUC.cor.norm > 0) %>% # omit negatives
+                                      na.omit() # omit NAs (those ith no dry weights)
+
+# MODEL ASSUMPTIONS for t test
+# shapiro wilk to check for normality 
+by(TempRamp_MEANS_30C$meanAUC.cor.norm, TempRamp_MEANS_30C$Family_EBV, shapiro.test) # 0.4235 - normal
+by(TempRamp_MEANS_32C$meanAUC.cor.norm, TempRamp_MEANS_32C$Family_EBV, shapiro.test) # 0.5106 - normal
+by(TempRamp_MEANS_34C$meanAUC.cor.norm, TempRamp_MEANS_34C$Family_EBV, shapiro.test) # 0.4167 - normal
+by(TempRamp_MEANS_38C$meanAUC.cor.norm, TempRamp_MEANS_38C$Family_EBV, shapiro.test) # 0.7979 - normal
+
+# levenes test to check for homogeneity of variance 
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = TempRamp_MEANS_30C) # 0.4958 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = TempRamp_MEANS_32C) # 0.2348 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = TempRamp_MEANS_34C) # 0.212 - pass
+car::leveneTest(meanAUC.cor.norm ~ Family_EBV, data = TempRamp_MEANS_38C) # 0.3857 - pass
+
+# conclusion
+# all models for the four temperatures pass! Move forward with t test
+t.test(meanAUC.cor.norm ~ Family_EBV, data = TempRamp_MEANS_30C, var.equal = FALSE) # 0.7409 - not significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = TempRamp_MEANS_32C, var.equal = FALSE) # 0.192 -  not significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = TempRamp_MEANS_34C, var.equal = FALSE) # 0.617 - not significant
+t.test(meanAUC.cor.norm ~ Family_EBV, data = TempRamp_MEANS_38C, var.equal = FALSE) # 0.04971 - significant
+
+#38C followup
+TempRamp_MEANS_38C %>% dplyr::group_by(Family_EBV) %>%  dplyr::summarise(mean = mean(meanAUC.cor.norm))
+# High	586.6778			
+# Low	  202.7337	
+((586.6778-202.7337)/586.6778)*100 # 65% lower metabolic activity on average for the low EBV than High EBV fams
+
+
+#38C followup
+AUC_calculate_48dpfMEANS_38C %>% dplyr::group_by(Family_EBV) %>%  dplyr::summarise(mean = mean(meanAUC.cor.norm))
+# High	3071300			
+# Low	  4317371	
+((4317371-3071300)/4317371)*100 # 29% lower  metabolic activity on average for the High EBV than Low EBV fams
+
+
+
+#  TWO WAY ANOVA  ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# run two way anpva for EBV * temperature
+
+TempRamp_MEANS <- Master_TempRamp_merged %>%  
+                    group_by(Treatment, Family, Family_EBV) %>% 
+                    dplyr::summarise(meanAUC.cor.norm = mean(AUC.cor.norm, na.rm = TRUE))%>% 
+                    dplyr::filter(meanAUC.cor.norm > 0) %>% # omit negatives
+                    na.omit() # omit NAs (those ith no dry weights)
+TwoWayANOVA_TempRamp <- aov(lm(meanAUC.cor.norm ~ Family_EBV*Treatment, data = TempRamp_MEANS))
+# check model assumptions 
+shapiro.test(resid(TwoWayANOVA_TempRamp)) # 0.2932 - pass 
+car::leveneTest(TwoWayANOVA_TempRamp) # 0.4986 - pass
+# run the ANOVA
+summary(TwoWayANOVA_TempRamp) # sig effect of temperature treatment
+#                       Df    Sum Sq   Mean Sq F value  Pr(>F)   
+# Family_EBV            1 9.878e+08 9.878e+08   0.001 0.97692   
+# Treatment             3 1.717e+13 5.723e+12   4.912 0.00556 **
+# Family_EBV:Treatment  3 6.342e+12 2.114e+12   1.814 0.16098   
+# Residuals            38 4.428e+13 1.165e+12 
+
+TwoWayANOVA_TempRamp_TUKEY <- emmeans::emmeans(TwoWayANOVA_TempRamp, ~ Treatment, type = "response")
+letters_table <- multcomp::cld(
+                              TwoWayANOVA_TempRamp_TUKEY,
+                              adjust = "tukey",
+                              Letters = letters
+                            )
+# Treatment  emmean     SE df lower.CL upper.CL .group
+# 32C       2043270 312000 38  1228586  2857953  a    
+# 34C       2655614 312000 38  1840930  3470297  ab   
+# 30C       3037697 341000 38  2145256  3930138  ab   
+# 38C       3694335 312000 38  2879652  4509019   b 
+((3694335-2043270)/3694335)*100 #45% lower metabolic activity at 32C than at 38C on average for all animals measured
+
 ```
