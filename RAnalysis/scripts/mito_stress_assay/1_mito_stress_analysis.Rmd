@@ -107,7 +107,7 @@ Plot_MEANSe_25C <- ggplot(long_data_25C, aes(x = Time_min,
                           stat_summary(fun = mean, geom = "point", size = 2) +
                           stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1)  + 
                           scale_x_continuous(breaks = seq(0, 300, by = 25)) +
-                          theme_bw()
+                          theme_classic()
 
 # rects_25C <- long_data_25C %>%
 #   group_by(paradigm) %>%
@@ -152,7 +152,7 @@ Plot_MEANSe_34C <- ggplot(long_data_34C, aes(x = Time_min,
                             stat_summary(fun = mean, geom = "point", size = 2) +
                             stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1) + 
                             scale_x_continuous(breaks = seq(0, 300, by = 25)) +
-                            theme_bw()
+                            theme_classic()
 
 ```
 
@@ -195,13 +195,18 @@ long_data_34C.clean <- long_data_34C.clean %>% dplyr::filter(!Family_ID %in% "25
 
 ```
 
-```{r}
+```{r output figure MitoStress_paradigm_MEANse}
 
-ggarrange(
-  Plot_MEANSe_25C,
-  Plot_MEANSe_34C,
-  nrow = 2
-)
+MitoStress_paradigm_MEANse <- ggarrange(
+                                    Plot_MEANSe_25C,
+                                    Plot_MEANSe_34C,
+                                    nrow = 2
+                                  )
+
+
+pdf("output/mito_stress/MitoStress_paradigm_MEANse.pdf", width = 8, height = 8)
+MitoStress_paradigm_MEANse
+dev.off()
 ```
 
 ### Calculations and target values 
@@ -297,9 +302,11 @@ Plot_Calcs_25C <- ggplot((CalcMaster_25C.final %>% dplyr::filter(!Metric %in% "O
                         stat_summary(fun = mean, geom = "point", size = 3) +
                         # 2. Add the Standard Error bars automatically
                         stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
-                        theme_bw() + 
-                        labs(title = "Mito Stress @ 25C") +
-                        facet_wrap(~Metric, scales = "free_y")
+                        theme_classic() +
+                        labs(title = "25C",
+                             y = "OCR (pmol O2/min)") +
+                        facet_wrap(~Metric, scales = "free_y")+
+                        theme(legend.position = "none") 
 
 
 ```
@@ -384,34 +391,30 @@ Plot_Calcs_34C <- ggplot((CalcMaster_34C.final %>% dplyr::filter(!Metric %in% "O
                         stat_summary(fun = mean, geom = "point", size = 3) +
                         # 2. Add the Standard Error bars automatically
                         stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2) +
-                        theme_bw() + 
-                        labs(title = "Mito Stress @ 34C") +
-                        facet_wrap(~Metric, scales = "free_y")
+                        theme_classic() +
+                        labs(title = "34C",
+                             y = "OCR (pmol O2/min)") +
+                        facet_wrap(~Metric, scales = "free_y")+
+                        theme(legend.position = "none") 
 
 
 ```
 
+```{r output figure MitoStress_Metrics_MEANse}
 
-```{r}
+MitoStress_Metrics_MEANse <-  ggarrange(
+                                        Plot_Calcs_25C,
+                                        Plot_Calcs_34C,
+                                        nrow = 2,
+                                        ncol = 1
+                                      )
 
-ggarrange(
-          ggarrange(
-            Plot_MEANSe_25C,
-            Plot_MEANSe_34C,
-            nrow = 1,
-            ncol = 2
-          ), 
 
-          ggarrange(
-            Plot_Calcs_25C,
-            Plot_Calcs_34C,
-            nrow = 1,
-            ncol = 2
-          ),
-          nrow = 2, 
-          ncol = 1
-)
+pdf("output/mito_stress/MitoStress_Metrics_MEANse.pdf", width = 8, height = 8)
+MitoStress_Metrics_MEANse
+dev.off()
 ```
+
 ```{r Statistic function}
 
 
@@ -488,7 +491,7 @@ return(outputfilename)
 
 
 ```{r run stats 34C}
-MasterFiinal_forStats <- rbind(CalcMaster_25C.final, CalcMaster_34C.final) %>% 
+MasterFinal_forStats <- rbind(CalcMaster_25C.final, CalcMaster_34C.final) %>% 
                               dplyr::select(-tally) %>% 
                               dplyr::rename(
                                 Groupvar = Temperature, 
@@ -497,8 +500,57 @@ MasterFiinal_forStats <- rbind(CalcMaster_25C.final, CalcMaster_34C.final) %>%
                               )
 
 
-runanova(MasterFiinal_forStats, anova_output)
+MitoStress_stats <- runanova(MasterFinal_forStats, anova_output) %>% dplyr::arrange(Temperature, Metric)
+
+write.csv(MitoStress_stats,"output/mito_stress/MitoStress_stats.csv")
+
+
 # 34 C significant  for baseline, MAxResp, and ATP linked resp
+MasterFinal_forStats_34C <- MasterFinal_forStats %>% dplyr::filter(Groupvar %in% '34 Celcius')
+
+
+# baseline model
+BaselineKW_32C <- kruskal.test(DPvar ~ INDvar, 
+                                data = )(MasterFinal_forStats_34C %>% dplyr::filter(Metric %in% 'Baseline'))
+BaselineKW_32C # 0.006733 significcant
+BaselineKW_32C_dunn <- (MasterFinal_forStats_34C %>% 
+                   dplyr::filter(Metric %in% 'Baseline')) %>% # # Post-hoc 
+                   rstatix::dunn_test(
+                      DPvar ~ INDvar,
+                      p.adjust.method = "holm"
+                    )
+# 258 differs from 277
+# 258 differs from 278
+# all other pairwise are non sig
+
+
+# MaxResp
+MaxRespKW_32C <- kruskal.test(DPvar ~ INDvar, 
+                                data = (MasterFinal_forStats_34C %>% dplyr::filter(Metric %in% 'MaxResp')))
+MaxRespKW_32C # 0.02973 significcant
+MaxRespKW_32C_dunn <- (MasterFinal_forStats_34C %>% 
+                   dplyr::filter(Metric %in% 'MaxResp')) %>% # # Post-hoc 
+                   rstatix::dunn_test(
+                      DPvar ~ INDvar,
+                      p.adjust.method = "holm"
+                    ) 
+# no sig pariwise
+# marginal 258 and 278
+
+
+
+# MaxResp
+ATPLinkedKW_32C <- kruskal.test(DPvar ~ INDvar, 
+                                data = (MasterFinal_forStats_34C %>% dplyr::filter(Metric %in% 'ATPLinked')))
+ATPLinkedKW_32C # 0.04192 significcant
+ATPLinkedKW_32C_dunn <- (MasterFinal_forStats_34C %>% 
+                   dplyr::filter(Metric %in% 'ATPLinked')) %>% # # Post-hoc 
+                   rstatix::dunn_test(
+                      DPvar ~ INDvar,
+                      p.adjust.method = "holm"
+                    )
+# no sig pariwise
+# marginal 258 and 278
 ```
 
 
